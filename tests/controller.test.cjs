@@ -63,6 +63,7 @@ test('pairing, sensor availability, snapshot calibration and acknowledgement', a
   h.tick(8);
   const frame = s.sent.at(-1);
   assert.equal(frame.type, 'motion'); assert.equal(frame.controllerId, 'b'.repeat(32));
+  assert.equal(frame.hasDeviceAngles,true); assert.deepEqual(frame.deviceAngles,{x:30,y:20,z:10});
   assert.deepEqual(frame.angularVelocity, {x:1,y:2,z:3}); assert.equal(frame.hasAcceleration, false); assert.equal(frame.hasGravity, true);
   h.click('calibrate'); const calibration = s.sent.at(-1);
   assert.equal(calibration.type, 'calibrate'); assert.equal(calibration.sequence, frame.sequence+1);

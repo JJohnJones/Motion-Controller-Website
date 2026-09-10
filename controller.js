@@ -137,6 +137,7 @@
     return { version: 1, type, controllerId, sequence: ++sequence, timestamp: orientation.timestamp,
       motionTimestamp: m ? m.timestamp : 0, orientation: orientation.q, screenAngle,
       absoluteOrientation: orientation.absolute,
+      hasDeviceAngles: true, deviceAngles: { x: orientation.alpha, y: orientation.beta, z: orientation.gamma },
       angularVelocity: m?.angularVelocity || ZERO, acceleration: m?.acceleration || ZERO,
       accelerationIncludingGravity: m?.gravity || ZERO,
       hasAngularVelocity: !!m?.angularVelocity, hasAcceleration: !!m?.acceleration, hasGravity: !!m?.gravity };

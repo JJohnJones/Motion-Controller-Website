@@ -1,10 +1,10 @@
 # Motion Controller Website
 
-## Bowling update (0.2.0)
+## Bowling update (0.3.0)
 
-The controller now includes a large **HOLD BALL** touch button. Update Unity first, publish all changed website assets including the new `hold-button.js`, then close old PWA tabs/app instances and reload so the v2-bowling service worker shell is active.
+The controller now includes a large **HOLD BALL** touch button and original alpha/beta/gamma values in its packets. Update Unity first, publish all changed website assets including `hold-button.js`, then close old PWA tabs/app instances and reload so the v3-bowling-axes service worker shell is active. Recalibrate after updating.
 
-Connect, enable motion, calibrate, and aim while Unity is **Ready**. Hold the button through your swing and lift your finger to release. A press locks aim in Unity. The button itself never launches based on a swing threshold. Faster valid angular swings produce faster balls; holding longer does not charge power. Wait for the desktop to reset before another press.
+Connect, enable motion, hold the phone screen-up with its top pointing down the lane (Wii-style grip), and calibrate. Aim with **alpha** while Unity is **Ready**. Hold the button through your swing and lift your finger while acceleration is forward and **beta is increasing**. A press locks aim. Relative gamma wrist roll controls hook, not aim. The button itself never launches based on a threshold. Faster valid angular swings produce faster balls; holding longer does not charge power. Wait for the desktop to reset before another press.
 
 The button sends reusable `primary` transitions (`pressed`, `released`, `canceled`) with `buttonSequence` and a phone `eventTimestamp`. Press/release also attach the most recent sensor snapshot. Pointer capture preserves the hold if your finger slides off the button; only the original finger can release it. Browser cancellation, screen rotation, recalibration, hiding the page or connection failure cancel without throwing. Scrolling/selection are suppressed while holding. Keep holding the phone securely; lift only your finger from the on-screen button.
 
