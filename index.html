@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="./styles.css">
   <title>Motion Controller</title>
   <script defer src="./motion-math.js"></script>
+  <script defer src="./hold-button.js"></script>
   <script defer src="./controller.js"></script>
 </head>
 <body>
@@ -32,6 +33,13 @@
     <div class="buttons"><button id="enable-motion">Enable Motion</button><button id="calibrate" disabled>Calibrate</button></div>
     <p id="motion-status" role="status">Motion has not been enabled.</p>
     <p id="calibration-status" role="status">Calibration required after connecting.</p>
+  </section>
+  <section aria-label="Bowling controls">
+    <h2>Bowling</h2>
+    <p>Aim first. Hold the button through your swing, then lift your finger to release. Wait for Unity to reset before the next throw.</p>
+    <button id="hold-ball" type="button" aria-pressed="false" disabled>HOLD BALL</button>
+    <p id="hold-status" role="status">Not pressed — connect and calibrate first.</p>
+    <p class="note">Keep a secure grip on your phone. Only lift your finger from the button.</p>
   </section>
   <section aria-label="Live sensors">
     <h2>Live sensors</h2>

@@ -4,11 +4,14 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const math = require('../motion-math.js');
+const HoldButton = require('../hold-button.js');
 function harness(permissionFactory) {
   const elements = new Map(), intervals = [], timeouts = new Map(), sockets = [], windowEvents = {}, documentEvents = {};
   let now = 100, timer = 0;
   const element = id => {
-    if (!elements.has(id)) elements.set(id, { value: '', textContent: '', disabled: false, handlers: {}, addEventListener(type, fn) { this.handlers[type] = fn; } });
+    if (!elements.has(id)) elements.set(id, { value: '', textContent: '', disabled: false, handlers: {}, dataset: {},
+      setAttribute() {}, setPointerCapture(id) { this.captured = id; }, hasPointerCapture(id) { return this.captured === id; }, releasePointerCapture() { this.captured = null; },
+      addEventListener(type, fn) { this.handlers[type] = fn; } });
     return elements.get(id);
   };
   class Socket {
@@ -22,15 +25,16 @@ function harness(permissionFactory) {
   }
   const device = permissionFactory || (() => Promise.resolve('granted'));
   const window = { isSecureContext: true, DeviceOrientationEvent: { requestPermission: device }, DeviceMotionEvent: { requestPermission: device }, addEventListener(type, fn) { windowEvents[type] = fn; } };
-  const document = { hidden: false, getElementById: element, addEventListener(type, fn) { documentEvents[type] = fn; } };
+  const document = { hidden: false, body: { classList: { toggle() {} } }, getElementById: element, addEventListener(type, fn) { documentEvents[type] = fn; } };
   const screen = { orientation: { angle: 0 } };
   const context = { window, document, screen, DeviceOrientationEvent: window.DeviceOrientationEvent, DeviceMotionEvent: window.DeviceMotionEvent,
-    MotionMath: math, location: { hash: '', pathname: '/', search: '' }, history: { replaceState() {} }, navigator: {},
+    MotionMath: math, HoldButton, location: { hash: '', pathname: '/', search: '' }, history: { replaceState() {} }, navigator: {},
     URL, URLSearchParams, WebSocket: Socket, performance: { now: () => now },
     setInterval: (fn, delay) => intervals.push({fn, delay}), setTimeout: fn => { timeouts.set(++timer, fn); return timer; }, clearTimeout: id => timeouts.delete(id) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../controller.js'), 'utf8'), context);
   return { element, sockets, screen, document, windowEvents, documentEvents, timeouts,
     click: id => element(id).handlers.click(), advance: ms => { now += ms; }, tick: delay => intervals.find(t => t.delay === delay).fn(),
+    pointer: (type, id = 1) => element('hold-ball').handlers[type]({ pointerId: id, button: 0, isPrimary: true, preventDefault() {} }),
     async enable() { await element('enable-motion').handlers.click(); },
     orient() { windowEvents.deviceorientation({alpha: 30, beta: 20, gamma: 10, absolute: false}); },
     connect() {
@@ -86,4 +90,39 @@ test('permission denial leaves a retry action and no false sensor stream', async
   const h = harness(() => Promise.resolve('denied')); await h.enable();
   assert.match(h.element('motion-status').textContent, /denied/);
   assert.equal(h.element('enable-motion').disabled, false); assert.equal(h.windowEvents.deviceorientation, undefined);
+});
+async function bowlingReady() {
+  const h = harness(); const s = h.connect(); await h.enable(); h.orient(); h.click('calibrate');
+  s.receive({ version: 1, type: 'calibrated', sequence: s.sent.at(-1).sequence });
+  return {h, s};
+}
+test('finger-down/up send exactly two ordered transitions with release-time snapshot', async () => {
+  const {h,s} = await bowlingReady(); h.pointer('pointerdown');
+  assert.equal(h.element('hold-ball').dataset.phase, 'held');
+  h.advance(30); h.orient(); h.tick(8); h.pointer('pointerup'); h.pointer('lostpointercapture');
+  const buttons = s.sent.filter(p => p.type === 'button');
+  assert.equal(buttons.length, 2); assert.equal(buttons[0].phase, 'pressed'); assert.equal(buttons[1].phase, 'released');
+  assert.equal(buttons[1].buttonSequence, 2); assert.equal(buttons[1].eventTimestamp, 130);
+  assert.equal(buttons[1].timestamp, 130); assert.equal(buttons[1].hasSnapshot, true);
+  assert.equal(h.element('hold-ball').dataset.phase, 'released');
+});
+test('second fingers cannot release the primary hold and pointercancel never throws', async () => {
+  const {h,s} = await bowlingReady(); h.pointer('pointerdown'); h.pointer('pointerdown',2); h.pointer('pointerup',2);
+  assert.equal(h.element('hold-ball').dataset.phase, 'held');
+  h.pointer('pointercancel'); h.pointer('pointerup');
+  const buttons=s.sent.filter(p=>p.type==='button'); assert.deepEqual(buttons.map(p=>p.phase),['pressed','canceled']);
+  assert.equal(buttons[1].hasSnapshot,false);
+});
+test('hidden pages cancel a hold; backed-up release closes connection instead of dropping silently', async () => {
+  const {h,s} = await bowlingReady(); h.pointer('pointerdown'); h.document.hidden=true; h.documentEvents.visibilitychange();
+  assert.equal(s.sent.at(-1).phase,'canceled'); assert.equal(s.readyState,3);
+  const other = await bowlingReady(); other.h.pointer('pointerdown'); other.s.bufferedAmount=9000; other.h.pointer('pointerup');
+  assert.equal(other.s.readyState,3); assert.match(other.h.element('status').textContent,/delivery failed/);
+  assert.equal(other.s.sent.filter(p=>p.phase==='released').length,0);
+});
+test('uncalibrated or stale input cannot press; screen rotation cancels an existing hold', async () => {
+  const h=harness(); const s=h.connect(); await h.enable(); h.orient(); h.pointer('pointerdown');
+  assert.equal(s.sent.filter(p=>p.type==='button').length,0);
+  const ready=await bowlingReady(); ready.h.pointer('pointerdown'); ready.h.screen.orientation.angle=90; ready.h.tick(200);
+  assert.equal(ready.s.sent.at(-1).phase,'canceled'); assert.equal(ready.h.element('hold-ball').disabled,true);
 });

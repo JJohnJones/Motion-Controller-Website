@@ -8,6 +8,21 @@
   let screenAngle = readScreenAngle(), lastSentSample = -1, lastSend = 0;
   let sent = 0, skipped = 0, rtt = null, lastPong = 0, pingAt = null, welcomeTimer;
   let calibrationSequence = null, calibrationSentAt = 0;
+  let calibrated = false, buttonSequence = 0;
+  const holdButton = HoldButton.bindHoldButton($('hold-ball'), {
+    canPress: () => connected() && calibrated && freshOrientation() && !document.hidden,
+    onTransition: sendButton,
+    onState: phase => {
+      document.body.classList.toggle('holding-ball', phase === 'held');
+      $('hold-ball').textContent = phase === 'held' ? 'HELD — LIFT TO RELEASE' : 'HOLD BALL';
+      $('hold-status').textContent = {
+        idle: 'Not pressed — connect and calibrate first.',
+        held: 'Held — swing, then lift your finger. Unity accepts a new hold only while Ready.',
+        released: 'Released — see Unity for the throw result. Wait for reset.',
+        canceled: 'Canceled — no throw. Press again when ready.'
+      }[phase];
+    }
+  });
   const fragment = new URLSearchParams(location.hash.slice(1));
   if (fragment.has('server')) $('server').value = fragment.get('server');
   if (fragment.has('token')) $('token').value = fragment.get('token');
@@ -21,6 +36,8 @@
   function freshOrientation() { return orientation && performance.now() - orientation.timestamp < 250; }
   function connected() { return socket?.readyState === WebSocket.OPEN && !!controllerId; }
   function reset(reason) {
+    holdButton.cancel();
+    holdButton.reset(); calibrated = false;
     const old = socket; socket = null; controllerId = ''; calibrationSequence = null;
     clearTimeout(welcomeTimer);
     if (old) old.close();
@@ -33,7 +50,7 @@
   function send(message) {
     if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     if (socket.bufferedAmount > MAX_BUFFER) { skipped++; return false; }
-    socket.send(JSON.stringify(message));
+    try { socket.send(JSON.stringify(message)); } catch { return false; }
     return true;
   }
   $('connect').addEventListener('click', () => {
@@ -45,7 +62,7 @@
       if (!/^[a-fA-F0-9]{32}$/.test($('token').value.trim())) throw new Error('Paste the 32-character pairing token shown by Unity.');
     } catch (e) { $('status').textContent = e.message; return; }
     reset('Connecting…');
-    sequence = sent = skipped = 0; rtt = null; pingAt = null; lastSentSample = -1;
+    sequence = sent = skipped = buttonSequence = 0; rtt = null; pingAt = null; lastSentSample = -1;
     const current = new WebSocket(url.href); socket = current;
     $('connect').disabled = true; $('disconnect').disabled = false;
     $('server').disabled = true; $('token').disabled = true;
@@ -69,7 +86,9 @@
         rtt = performance.now() - pingAt; lastPong = performance.now(); pingAt = null;
       } else if (reply.type === 'calibrated' && reply.sequence === calibrationSequence) {
         calibrationSequence = null;
-        $('calibration-status').textContent = 'Calibrated. Rotate your phone to move the cube.';
+        calibrated = true;
+        $('calibration-status').textContent = 'Calibrated. Aim, hold the ball button, swing, then release.';
+        $('hold-status').textContent = 'Not pressed — ready to hold. Check Unity is Ready.';
       }
     });
     current.addEventListener('close', () => { if (socket === current) reset('Disconnected. Check token, allowed origin, capacity, or network; then reconnect.'); });
@@ -122,8 +141,25 @@
       accelerationIncludingGravity: m?.gravity || ZERO,
       hasAngularVelocity: !!m?.angularVelocity, hasAcceleration: !!m?.acceleration, hasGravity: !!m?.gravity };
   }
+  function sendButton(phase) {
+    if (!connected()) return false;
+    updateScreenAngle();
+    // Cancellation never becomes a release. If required input cannot be sent, disconnect
+    // instead of silently dropping it and leaving Unity holding a ball indefinitely.
+    if (phase !== 'canceled' && (!calibrated || !freshOrientation())) phase = 'canceled';
+    const snapshot = phase !== 'canceled' && freshOrientation();
+    const p = snapshot ? packet('button') : { version: 1, type: 'button', controllerId };
+    Object.assign(p, { button: 'primary', phase, buttonSequence: ++buttonSequence,
+      eventTimestamp: performance.now(), hasSnapshot: !!snapshot });
+    if (!send(p)) {
+      reset('Button delivery failed. Reconnect and calibrate before throwing.');
+      return false;
+    }
+    return phase !== 'canceled';
+  }
   $('calibrate').addEventListener('click', () => {
     if (!connected() || !freshOrientation()) return;
+    holdButton.cancel(); calibrated = false;
     const p = packet('calibrate');
     if (send(p)) {
       calibrationSequence = p.sequence; calibrationSentAt = performance.now();
@@ -147,12 +183,16 @@
   function updateScreenAngle() {
     const nextScreenAngle = readScreenAngle();
     if (nextScreenAngle !== screenAngle) {
-      screenAngle = nextScreenAngle; calibrationSequence = null;
+      screenAngle = nextScreenAngle; calibrationSequence = null; calibrated = false;
+      holdButton.cancel();
       $('calibration-status').textContent = 'Screen orientation changed. Hold still and calibrate again.';
     }
   }
   setInterval(() => {
     updateScreenAngle();
+    if (holdButton.held && (!connected() || !calibrated || !freshOrientation())) holdButton.cancel();
+    // Keep an active pointer enabled until its release/cancellation has been handled.
+    $('hold-ball').disabled = !holdButton.held && (!connected() || !calibrated || !freshOrientation());
     $('calibrate').disabled = !connected() || !freshOrientation() || calibrationSequence !== null;
     if (calibrationSequence !== null && performance.now() - calibrationSentAt > 5000) {
       calibrationSequence = null; $('calibration-status').textContent = 'Calibration acknowledgement timed out. Try again.';

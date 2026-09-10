@@ -20,3 +20,7 @@ code, dd, #network { font: .95rem/1.6 ui-monospace, monospace; overflow-wrap: an
 dt { color: #b8c9df; margin-top: 12px; }
 dd { margin: 3px 0 0; }
 #status { font-weight: 700; }
+#hold-ball { display: block; width: 100%; min-height: 180px; font-size: 1.8rem; border: 3px solid #80d5ff; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#hold-ball[data-phase="held"] { background: #ffce75; border-color: #ffce75; }
+body.holding-ball { overflow: hidden; overscroll-behavior: none; }
+body.holding-ball main { user-select: none; -webkit-user-select: none; }

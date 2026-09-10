@@ -1,5 +1,15 @@
 # Motion Controller Website
 
+## Bowling update (0.2.0)
+
+The controller now includes a large **HOLD BALL** touch button. Update Unity first, publish all changed website assets including the new `hold-button.js`, then close old PWA tabs/app instances and reload so the v2-bowling service worker shell is active.
+
+Connect, enable motion, calibrate, and aim while Unity is **Ready**. Hold the button through your swing and lift your finger to release. A press locks aim in Unity. The button itself never launches based on a swing threshold. Faster valid angular swings produce faster balls; holding longer does not charge power. Wait for the desktop to reset before another press.
+
+The button sends reusable `primary` transitions (`pressed`, `released`, `canceled`) with `buttonSequence` and a phone `eventTimestamp`. Press/release also attach the most recent sensor snapshot. Pointer capture preserves the hold if your finger slides off the button; only the original finger can release it. Browser cancellation, screen rotation, recalibration, hiding the page or connection failure cancel without throwing. Scrolling/selection are suppressed while holding. Keep holding the phone securely; lift only your finger from the on-screen button.
+
+Local Held/Released text reports touch state. The Unity panel reports whether the throw was accepted and whether the ball is Ready/Holding/Rolling/Resetting. There is no desktop game-state feedback on the phone yet. Gyroscope availability is required to calculate bowling power; orientation alone still works for the cube. See the Unity project's `Documentation/BOWLING_SETUP.md` and `CONTROLLER_BUTTON_PROTOCOL.md` for tuning and the protocol extension.
+
 These files belong at the root of **git@github.com:JJohnJones/Motion-Controller-Website.git**, separate from the Unity game repository.
 
 A minimal static PWA for the Unity phone-to-cube prototype. No framework, build, backend or runtime npm dependency is required. Sensor and connection behavior is implemented in `controller.js`; `motion-math.js` only converts browser orientation angles to a right-handed quaternion. Unity owns screen-coordinate conversion, calibration, smoothing and motion history. No absolute position estimation is performed.
