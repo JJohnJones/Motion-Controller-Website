@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101c2d">
+  <meta name="description" content="Phone motion controller engineering prototype for Unity.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Motion Controller">
+  <meta name="referrer" content="no-referrer">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>Motion Controller</title>
+  <script defer src="./motion-math.js"></script>
+  <script defer src="./controller.js"></script>
+</head>
+<body>
+<main>
+  <h1>Motion Controller</h1>
+  <p class="intro">Connect your phone, enable motion, then hold it comfortably and calibrate.</p>
+  <section aria-label="Connection">
+    <p id="status" role="status">Disconnected</p>
+    <label for="server">Secure WebSocket endpoint</label>
+    <input id="server" type="url" inputmode="url" placeholder="wss://your-tunnel.trycloudflare.com/controller" autocomplete="off" spellcheck="false">
+    <label for="token">Unity pairing token</label>
+    <input id="token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
+    <div class="buttons"><button id="connect">Connect</button><button id="disconnect" disabled>Disconnect</button></div>
+    <p>Controller ID: <code id="controller-id">—</code></p>
+  </section>
+  <section aria-label="Motion controls">
+    <div class="buttons"><button id="enable-motion">Enable Motion</button><button id="calibrate" disabled>Calibrate</button></div>
+    <p id="motion-status" role="status">Motion has not been enabled.</p>
+    <p id="calibration-status" role="status">Calibration required after connecting.</p>
+  </section>
+  <section aria-label="Live sensors">
+    <h2>Live sensors</h2>
+    <dl>
+      <dt>Orientation α / β / γ · degrees</dt><dd id="orientation">Unavailable</dd>
+      <dt>Rotation rate x / y / z · degrees/s</dt><dd id="rotation">Unavailable</dd>
+      <dt>Acceleration x / y / z · m/s²</dt><dd id="acceleration">Unavailable</dd>
+      <dt>Including gravity · m/s²</dt><dd id="gravity">Unavailable</dd>
+      <dt>Screen angle · degrees</dt><dd id="screen">0</dd>
+    </dl>
+    <p class="note">Sensor values use the phone’s natural device axes. Unity converts them to screen-relative axes.</p>
+  </section>
+  <section aria-label="Network diagnostics">
+    <h2>Network</h2>
+    <p id="network">No connection</p>
+    <p class="note">RTT is round-trip time through Unity, not one-way sensor latency. Keep this page visible and the phone awake.</p>
+  </section>
+</main>
+</body>
+</html>

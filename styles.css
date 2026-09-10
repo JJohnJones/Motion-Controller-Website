@@ -1,0 +1,22 @@
+:root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; background: #09111d; color: #edf3ff; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
+main { max-width: 620px; margin: auto; }
+h1 { font-size: 1.6rem; margin: 0 0 8px; }
+h2 { font-size: 1.1rem; margin-top: 0; }
+p { margin: 10px 0; }
+.intro, .note { color: #b8c9df; }
+.note { font-size: .9rem; }
+section { background: #101c2d; border: 1px solid #304159; padding: 16px; margin: 16px 0; border-radius: 8px; }
+label, input { display: block; width: 100%; }
+label { margin: 12px 0 4px; }
+input { font: inherit; padding: 10px; color: inherit; background: #09111d; border: 1px solid #637891; border-radius: 4px; min-width: 0; }
+button { font: inherit; font-weight: 650; color: #051525; background: #80d5ff; border: 0; border-radius: 5px; min-height: 48px; padding: 10px 16px; cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+:focus-visible { outline: 3px solid #ffce75; outline-offset: 3px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.buttons button { flex: 1 1 140px; }
+code, dd, #network { font: .95rem/1.6 ui-monospace, monospace; overflow-wrap: anywhere; }
+dt { color: #b8c9df; margin-top: 12px; }
+dd { margin: 3px 0 0; }
+#status { font-weight: 700; }
