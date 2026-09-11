@@ -14,6 +14,8 @@
   <title>Motion Controller</title>
   <script defer src="./motion-math.js"></script>
   <script defer src="./hold-button.js"></script>
+  <script defer src="./config.js"></script>
+  <script defer src="./lan-transport.js"></script>
   <script defer src="./controller.js"></script>
 </head>
 <body>
@@ -21,12 +23,14 @@
   <h1>Motion Controller</h1>
   <p class="intro">Connect your phone, enable motion, then hold it comfortably and calibrate.</p>
   <section aria-label="Connection">
-    <p id="status" role="status">Disconnected</p>
+    <p id="status" role="status">Scan the QR code displayed by your game to connect.</p>
+    <details><summary>Legacy WebSocket fallback</summary>
     <label for="server">Secure WebSocket endpoint</label>
     <input id="server" type="url" inputmode="url" placeholder="wss://your-tunnel.trycloudflare.com/controller" autocomplete="off" spellcheck="false">
     <label for="token">Unity pairing token</label>
     <input id="token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
-    <div class="buttons"><button id="connect">Connect</button><button id="disconnect" disabled>Disconnect</button></div>
+    </details>
+    <div class="buttons"><button id="connect">Reconnect</button><button id="disconnect" disabled>Disconnect</button></div>
     <p>Controller ID: <code id="controller-id">—</code></p>
   </section>
   <section aria-label="Motion controls">
@@ -41,6 +45,7 @@
     <p id="hold-status" role="status">Not pressed — connect and calibrate first.</p>
     <p class="note">Keep a secure grip on your phone. Only lift your finger from the button.</p>
   </section>
+  <details><summary>Sensor and network diagnostics</summary>
   <section aria-label="Live sensors">
     <h2>Live sensors</h2>
     <dl>
@@ -57,6 +62,7 @@
     <p id="network">No connection</p>
     <p class="note">RTT is round-trip time through Unity, not one-way sensor latency. Keep this page visible and the phone awake.</p>
   </section>
+</details>
 </main>
 </body>
 </html>

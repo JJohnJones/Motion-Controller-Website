@@ -5,6 +5,12 @@ const vm = require('node:vm');
 const path = require('node:path');
 const math = require('../motion-math.js');
 const HoldButton = require('../hold-button.js');
+
+test('Unity diagnostic ping is echoed without changing sensor timestamps', () => {
+  const h = harness(); const s = h.connect();
+  s.receive({ version:1, type:'serverPing', controllerId:'b'.repeat(32), timestamp:123.456 });
+  assert.deepEqual(s.sent.at(-1), { version:1, type:'serverPong', controllerId:'b'.repeat(32), timestamp:123.456 });
+});
 function harness(permissionFactory) {
   const elements = new Map(), intervals = [], timeouts = new Map(), sockets = [], windowEvents = {}, documentEvents = {};
   let now = 100, timer = 0;
