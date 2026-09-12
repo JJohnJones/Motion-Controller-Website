@@ -38,7 +38,7 @@ Use this section only when validating the preserved tunnel transport. For normal
 2. In the separate Unity project create the scene with **Tools → Motion Controllers → Create Phone Cube Prototype Scene**. Set ControllerReceiver's Allowed Origin to this site's exact origin (e.g. `https://jjohnj.github.io`, without the repository path), then press Play.
 3. On the PC install cloudflared using its official instructions and run `cloudflared tunnel --url http://127.0.0.1:8080`. Keep it running. From its reported `https://HOST.trycloudflare.com` address, use **`wss://HOST.trycloudflare.com/controller`** in this PWA.
 4. Open the PWA directly in iPhone Safari or Android Chrome. Enter that WSS endpoint and the random 32-character token shown in Unity. Tap **Connect**, then **Enable Motion**, granting any permission requests. Confirm live orientation values.
-5. Hold the phone facing you, tap **Calibrate**, wait for acknowledgement, and rotate it. Recalibrate after changing portrait/landscape. Keep the page visible and the phone awake. Backgrounding disconnects; reconnect/recalibrate on return.
+5. Hold the phone facing you, tap **Calibrate**, wait for acknowledgement, and rotate it. Recalibrate after changing portrait/landscape. Keep the page visible and the phone awake. Backgrounding cancels a held button but retains LAN pairing. Brief interruptions recover with the same player and calibration; OS suspension beyond the 60-second recovery budget may require pairing again. The legacy WebSocket debug mode retains its previous behavior.
 
 The optional pairing link is `https://YOUR-PWA/#server=URL-ENCODED-WSS-ENDPOINT&token=SESSION-TOKEN`; Unity's debug panel can copy it. The fragment is removed after prefilling; secrets are not put in localStorage or the service-worker cache. Do not publish a real pairing link/token in this repo.
 
@@ -62,3 +62,16 @@ The service worker caches only shell assets for offline opening. **Offline openi
 Wire protocol v1: `hello` with token → `welcome` with assigned controller ID → `motion`/`calibrate` snapshots. Every snapshot contains `version`, `type`, `controllerId`, `sequence`, `timestamp`, `motionTimestamp`, `orientation` `{x,y,z,w}`, `screenAngle`, `absoluteOrientation`, vectors `angularVelocity`, `acceleration`, `accelerationIncludingGravity`, and flags `hasAngularVelocity`, `hasAcceleration`, `hasGravity`. Calibration replies echo its sequence. `ping`/`pong` echo the phone timestamp for RTT. Server clocks are never subtracted from phone clocks. See the Unity repository's `Documentation/CONTROLLER_PROTOCOL.md` for the full contract and `PHONE_CUBE_SETUP.md` for setup/firewall/manual checks.
 
 References: [motion permission](https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent/requestPermission_static), [browser coordinate specification](https://www.w3.org/TR/orientation-event/), [WebSocket secure-context guidance](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API/Writing_WebSocket_client_applications), [tunnel setup](https://developers.cloudflare.com/tunnel/setup/).
+
+
+## LAN recovery diagnostics
+
+Deploy the matching signaling `resumeHost` / `resumePeer` support before these PWA changes. No endpoint changes are needed. The service-worker shell version is bumped; close old controller tabs and reopen once after deploying.
+
+Expand **Connection diagnostics** for timestamped PC connection, ICE connection/gathering, SDP signaling, channel open/close/error and signaling WebSocket transitions. ICE candidate errors include the browser error code/text. The panel also reports the last incoming heartbeat and outgoing pong on the phone clock. Browser console lines start with `[LAN controller]`; secrets and SDP are omitted.
+
+The host alone creates offers. The phone answers numbered revisions and requests host recovery rather than creating competing offers. `reset: true` replaces only the peer/channel, retaining the ticket and controller ID. Socket resume uses the same in-memory ticket; a full page reload does not retain it. Signaling retries after 1, 2, 4, 8, then 10 seconds and never closes a healthy DataChannel solely because signaling is offline.
+
+Transient disconnects wait 8 seconds before requesting a restart. Failed ICE/channel errors request one immediately; requests are rate-limited to once per 5 seconds. A 12-second receive gap starts recovery. Recovery has a 60-second budget; repeated events do not extend it. A received heartbeat restores the phone UI, while Unity independently requires a fresh successful round trip before accepting gameplay input. A held gesture is canceled across recovery; start a new hold after reconnecting.
+
+Keep the page foregrounded for continuous motion. iOS/Android can suspend background timers, sensors and networking; connection preservation cannot prevent OS suspension. `pagehide` with BFCache persistence retains the connection; explicit navigation/close sends best-effort leave. If the OS kills the page without an unload event, the host observes timeout rather than a provable browser-close reason.
