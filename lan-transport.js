@@ -14,6 +14,7 @@ class LanControllerTransport extends EventTarget {
     this.createdAt = this.lastReceive = performance.now(); this.recoveryAt = null;
     this.lastRestart = -Infinity; this.retryAt = 0; this.attempts = 0;
     this.lastPing = this.lastPong = null;
+    this.iceConfig = null; this.nextIceRequest = 0; this.nextStats = 0; this.restarts = 0; this.path = 'Connection: negotiating';
     this.connectSignal(); this.timer = setInterval(() => this.tick(), 1000);
   }
   log(detail) {
@@ -22,7 +23,7 @@ class LanControllerTransport extends EventTarget {
     console.info('[LAN controller]', line);
   }
   get diagnostics() {
-    return `PC=${this.pc?.connectionState || 'none'} ICE=${this.pc?.iceConnectionState || 'none'} gathering=${this.pc?.iceGatheringState || 'none'} SDP=${this.pc?.signalingState || 'none'}\nDataChannel=${this.channel?.readyState || 'none'} signaling WS=${this.signal?.readyState ?? 'offline'} authenticated=${!!this.signalReady}\nLast received=${this.lastReceive.toFixed(0)} ping=${this.lastPing ?? '—'} pong sent=${this.lastPong ?? '—'} ms (phone clock)\n${this.logs.join('\n')}`;
+    return `${this.path} · ICE restarts=${this.restarts}\nPC=${this.pc?.connectionState || 'none'} ICE=${this.pc?.iceConnectionState || 'none'} gathering=${this.pc?.iceGatheringState || 'none'} SDP=${this.pc?.signalingState || 'none'}\nDataChannel=${this.channel?.readyState || 'none'} signaling WS=${this.signal?.readyState ?? 'offline'} authenticated=${!!this.signalReady}\nLast received=${this.lastReceive.toFixed(0)} ping=${this.lastPing ?? '—'} pong sent=${this.lastPong ?? '—'} ms (phone clock)\n${this.logs.join('\n')}`;
   }
   get bufferedAmount() { return this.channel?.bufferedAmount || 0; }
   signalSend(m) {
@@ -54,6 +55,8 @@ class LanControllerTransport extends EventTarget {
   async receive(json) {
     if (typeof json !== 'string' || json.length > 65536) throw new Error('Invalid signaling packet');
     const m = JSON.parse(json);
+    if (m.iceConfig) this.applyIceConfig(m.iceConfig);
+    if (m.type === 'ice-config') return;
     if (m.type === 'error' || m.type === 'ended') {
       this.log(`signaling ${m.type}: ${m.code}`);
       if (m.code === 'host-offline' && !this.peer) return; // retry join when host signaling resumes
@@ -75,12 +78,13 @@ class LanControllerTransport extends EventTarget {
     if (m.revision < this.revision) return;
     if (m.type === 'offer' && typeof m.sdp === 'string') {
       if (m.revision === this.revision) return;
+      if (this.revision) this.restarts++;
       this.revision = m.revision; this.remoteReady = this.answerSent = false;
       this.localIce = []; this.pendingIce = this.pendingIce.filter(i => i.revision === m.revision);
       if (m.reset || !this.pc) this.createPeer();
       const pc = this.pc, revision = this.revision;
       this.log(`host offer revision=${revision} reset=${!!m.reset}`);
-      this.onState(this.recovering ? 'Reconnecting' : 'Connecting', 'Negotiating direct controller connection…');
+      this.onState(this.recovering ? 'Reconnecting' : 'Connecting', 'Negotiating controller connection…');
       await pc.setRemoteDescription({type:'offer',sdp:m.sdp});
       if (this.closed || this.pc !== pc) return;
       this.remoteReady = true;
@@ -97,6 +101,48 @@ class LanControllerTransport extends EventTarget {
       else throw new Error('Too many ICE candidates');
     } else throw new Error('Unexpected signaling message');
   }
+  rtcConfiguration() {
+    return {iceServers:this.iceConfig.iceServers, iceTransportPolicy:this.iceConfig.mode === 'relay' ? 'relay' : 'all'};
+  }
+  applyIceConfig(config) {
+    if (config.warning) this.log(config.warning);
+    if (config.error) { this.log('ICE configuration unavailable: ' + config.error); return; }
+    if (!Number.isFinite(config.expiresAt) || config.expiresAt <= Date.now() || !['all','relay','direct'].includes(config.mode) ||
+        !Array.isArray(config.iceServers) || config.iceServers.length > 16) throw new Error('Invalid ICE configuration');
+    for (const s of config.iceServers) {
+      if (!Array.isArray(s.urls) || !s.urls.length || s.urls.length > 8 || s.urls.some(u => typeof u !== 'string' || u.length > 512 ||
+          !/^(stuns?|turns?):[a-zA-Z0-9.\[\]:-]+(\?transport=(udp|tcp))?$/.test(u))) throw new Error('Invalid ICE URLs');
+      if (s.urls.some(u => u.startsWith('turn')) && (typeof s.username !== 'string' || !s.username || s.username.length > 256 ||
+          typeof s.credential !== 'string' || !s.credential || s.credential.length > 256)) throw new Error('Missing temporary TURN credentials');
+    }
+    const renewed = this.iceConfig && this.iceConfig.expiresAt !== config.expiresAt;
+    this.iceConfig = config;
+    if (this.pc) {
+      this.pc.setConfiguration(this.rtcConfiguration());
+      if (renewed && config.iceServers.some(s=>s.urls.some(u=>u.startsWith('turn')))) this.requestRecovery('TURN credentials renewed; refreshing allocations', true);
+    }
+    this.log(`ICE configuration refreshed; mode=${config.mode}; TURN=${config.iceServers.some(s=>s.urls.some(u=>u.startsWith('turn'))) ? 'available' : 'NOT CONFIGURED / disabled'}; credentials omitted`);
+  }
+  async readStats() {
+    const pc = this.pc; if (!pc?.getStats) return;
+    this.statsPending = true;
+    try {
+      const report = await pc.getStats(); if (this.pc !== pc || this.closed) return;
+      let pair;
+      for (const s of report.values()) if (s.type === 'transport' && s.selectedCandidatePairId) pair = report.get(s.selectedCandidatePairId);
+      // Older browsers may omit transport stats; a nominated succeeded pair is the fallback.
+      if (!pair) for (const s of report.values()) if (s.type === 'candidate-pair' && s.nominated && s.state === 'succeeded') pair = s;
+      if (!pair) return;
+      const local = report.get(pair.localCandidateId), remote = report.get(pair.remoteCandidateId);
+      if (!local || !remote) return;
+      const relay = local.candidateType === 'relay' || remote.candidateType === 'relay';
+      this.path = `Connection: ${relay ? 'TURN Relay' : 'Direct peer-to-peer'} · ${local.candidateType}/${remote.candidateType} · ${local.protocol || '?'} · relay transport=${local.relayProtocol || '—'} · ICE RTT=${Number.isFinite(pair.currentRoundTripTime) ? (pair.currentRoundTripTime*1000).toFixed(0)+' ms' : 'unavailable'}`;
+      this.iceRtt = Number.isFinite(pair.currentRoundTripTime) ? pair.currentRoundTripTime * 1000 : null;
+      const key = pair.localCandidateId + '/' + pair.remoteCandidateId;
+      if (key !== this.pairKey) { this.pairKey = key; this.log(this.path); }
+    } catch (e) { this.log('ICE stats unavailable: ' + e.name); }
+    finally { this.statsPending = false; }
+  }
   disposePeer() {
     if (this.channel) {
       this.channel.onopen = this.channel.onclose = this.channel.onerror = this.channel.onmessage = null;
@@ -110,18 +156,22 @@ class LanControllerTransport extends EventTarget {
   }
   createPeer() {
     this.disposePeer();
-    const pc = this.pc = new RTCPeerConnection({iceServers:[]});
+    if (!this.iceConfig || this.iceConfig.expiresAt <= Date.now() + 10000) throw new Error('Fresh ICE configuration required');
+    const pc = this.pc = new RTCPeerConnection(this.rtcConfiguration());
+    this.relayCandidates = 0; this.path = 'Connection: negotiating'; this.pairKey = '';
     for (const [event, field] of [['connectionstatechange','connectionState'],['iceconnectionstatechange','iceConnectionState'],['icegatheringstatechange','iceGatheringState'],['signalingstatechange','signalingState']]) {
       pc['on'+event] = () => {
         if (this.pc !== pc || this.closed) return;
         this.log(`${field}=${pc[field]}`);
+        if (field === 'iceGatheringState' && pc[field] === 'complete' && !this.relayCandidates && this.iceConfig.iceServers.some(s => s.urls.some(u => u.startsWith('turn')))) this.log('No relay candidates: check TURN credentials, DNS, firewall and ICE server errors.');
         if (pc[field] === 'disconnected') this.requestRecovery(field + ' disconnected');
         if (pc[field] === 'failed' || pc[field] === 'closed') this.requestRecovery(field + ' ' + pc[field], true);
       };
     }
-    pc.onicecandidateerror = e => this.log(`ICE candidate error code=${e.errorCode} text=${e.errorText || 'unspecified'}`);
+    pc.onicecandidateerror = e => this.log(`ICE server error code=${e.errorCode} (${e.errorCode === 701 ? 'server unreachable from an interface' : [401,438].includes(e.errorCode) ? 'authentication/nonce failure' : 'STUN/TURN error'}) text=${e.errorText || 'unspecified'}`);
     pc.onicecandidate = e => {
       if (!e.candidate || this.pc !== pc || this.closed) return;
+      if (e.candidate.type === 'relay' || e.candidate.candidate.includes(' typ relay')) this.relayCandidates++;
       const m = {type:'ice',peer:this.peer,revision:this.revision,candidate:e.candidate.candidate,sdpMid:e.candidate.sdpMid || '0',sdpMLineIndex:e.candidate.sdpMLineIndex || 0};
       if (this.answerSent) this.signalSend(m); else if (this.localIce.length < 64) this.localIce.push(m);
     };
@@ -172,6 +222,10 @@ class LanControllerTransport extends EventTarget {
   tick() {
     if (this.closed) return;
     const now = performance.now();
+    if (this.signalReady && now >= this.nextIceRequest && (!this.iceConfig || this.iceConfig.expiresAt < Date.now() + 120000)) {
+      this.signalSend({type:'ice-config'}); this.nextIceRequest = now + 15000;
+    }
+    if (this.pc && !this.statsPending && now >= this.nextStats) { this.nextStats = now + 3000; this.readStats(); }
     if (!this.signal && now >= this.retryAt) this.connectSignal();
     if (this.signal && !this.signalReady && now - this.signalStarted > 20000) this.signal.close();
     if (!this.recovering && now - this.lastReceive > (this.readyState === 1 ? 12000 : 25000)) this.requestRecovery('heartbeat/connection timeout');

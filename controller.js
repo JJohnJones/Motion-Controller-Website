@@ -6,7 +6,7 @@
   let socket = null, controllerId = '', sequence = 0, orientation = null, motion = null;
   let motionEnabled = false, enabling = false, enabledAt = 0, motionNote = '';
   let screenAngle = readScreenAngle(), lastSentSample = -1, lastSend = 0;
-  let sent = 0, skipped = 0, rtt = null, lastPong = 0, pingAt = null, welcomeTimer;
+  let sent = 0, skipped = 0;
   let calibrationSequence = null, calibrationSentAt = 0;
   let calibrated = false, buttonSequence = 0;
   const holdButton = HoldButton.bindHoldButton($('hold-ball'), {
@@ -26,8 +26,6 @@
   const fragment = new URLSearchParams(location.hash.slice(1));
   const lanSession = fragment.get('session');
   let lanStopped = false, retryTimer = null, retryCount = 0;
-  if (fragment.has('server')) $('server').value = fragment.get('server');
-  if (fragment.has('token')) $('token').value = fragment.get('token');
   // Pairing secrets stay out of HTTP requests, localStorage, and the visible URL after loading.
   if (location.hash) history.replaceState(null, '', location.pathname + location.search);
 
@@ -42,12 +40,10 @@
     holdButton.cancel();
     holdButton.reset(); calibrated = false;
     const old = socket; socket = null; controllerId = ''; calibrationSequence = null;
-    clearTimeout(welcomeTimer);
     if (old) old.close();
     $('status').textContent = reason;
     $('controller-id').textContent = '—';
     $('connect').disabled = false; $('disconnect').disabled = true;
-    $('server').disabled = false; $('token').disabled = false;
     $('calibration-status').textContent = 'Calibration required after connecting.';
     if (lanSession && !lanStopped && !document.hidden && retryCount < 5)
       retryTimer = setTimeout(startLan, Math.min(10000, 1000 * 2 ** retryCount++));
@@ -59,27 +55,15 @@
     return true;
   }
   $('connect').addEventListener('click', () => {
-    if (lanSession) { lanStopped = false; retryCount = 0; startLan(); return; }
-    let url;
-    try {
-      url = new URL($('server').value.trim());
-      if (url.protocol !== 'wss:' || url.pathname !== '/controller' || url.search || url.hash || url.username || url.password)
-        throw new Error('Use wss://hostname/controller without a query or credentials.');
-      if (!/^[a-fA-F0-9]{32}$/.test($('token').value.trim())) throw new Error('Paste the 32-character pairing token shown by Unity.');
-    } catch (e) { $('status').textContent = e.message; return; }
-    reset('Connecting…');
-    sequence = sent = skipped = buttonSequence = 0; rtt = null; pingAt = null; lastSentSample = -1;
-    const current = new WebSocket(url.href); socket = current;
-    attach(current, $('token').value.trim().toLowerCase());
+    if (!lanSession) { $('status').textContent = 'Scan the QR code in Unity to connect.'; return; }
+    lanStopped = false; retryCount = 0; startLan();
   });
-  function attach(current, token) {
+  function attach(current) {
     $('connect').disabled = true; $('disconnect').disabled = false;
-    $('server').disabled = true; $('token').disabled = true;
-    if (!lanSession) welcomeTimer = setTimeout(() => { if (socket === current && !controllerId) reset('Pairing timed out. Check Unity, endpoint, token, and allowed origin.'); }, lanSession ? 30000 : 10000);
     current.addEventListener('open', () => {
       if (socket !== current) return;
       $('status').textContent = 'Connected to endpoint; pairing…';
-      send({ version: 1, type: 'hello', token: token || current.ticket });
+      send({ version: 1, type: 'hello', token: current.ticket });
     });
     current.addEventListener('recovering', () => { if (socket === current) holdButton.cancel(); });
     current.addEventListener('recovered', () => { if (socket === current) $('status').textContent = 'Connected · LAN WebRTC'; });
@@ -91,14 +75,12 @@
       if (reply.type === 'welcome' && /^[a-f0-9]{32}$/.test(reply.controllerId)) {
         retryCount = 0;
         if (controllerId && controllerId !== reply.controllerId) calibrated = false;
-        controllerId = reply.controllerId; lastPong = performance.now();
-        clearTimeout(welcomeTimer);
-        $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
-        $('status').textContent = lanSession ? 'Connected · LAN WebRTC' : 'Connected to Unity';
+        controllerId = reply.controllerId;
+            $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
+        $('status').textContent = 'Connected · WebRTC';
       } else if (reply.type === 'serverPing' && Number.isFinite(reply.timestamp) && reply.controllerId === controllerId) {
         if (send({ version: 1, type: 'serverPong', controllerId, timestamp: reply.timestamp })) current.noteHeartbeat?.();
-      } else if (reply.type === 'pong' && reply.timestamp === pingAt) {
-        rtt = performance.now() - pingAt; lastPong = performance.now(); pingAt = null;
+
       } else if (reply.type === 'calibrated' && reply.sequence === calibrationSequence) {
         calibrationSequence = null;
         calibrated = true;
@@ -109,9 +91,9 @@
     current.addEventListener('close', () => {
       if (socket !== current) return;
       if (current.terminal) lanStopped = true;
-      reset(current.reason || 'Disconnected. Check token, allowed origin, capacity, or network; then reconnect.');
+      reset(current.reason || 'Disconnected. Check the network or scan the current QR code.');
     });
-    current.addEventListener('error', () => { if (socket === current) reset('Connection failed. Check WSS address, tunnel, and Unity allowed origin.'); });
+    current.addEventListener('error', () => { if (socket === current) reset('Connection failed. Check signaling and ICE diagnostics.'); });
   }
   function startLan() {
     clearTimeout(retryTimer); retryTimer = null;
@@ -119,11 +101,11 @@
     if (socket && !socket.closed && socket instanceof LanControllerTransport) { socket.requestRecovery('Reconnect requested', true); return; }
     // Suppress automatic retry while replacing an existing transport.
     lanStopped = true; reset('Connecting…'); lanStopped = false;
-    sequence = sent = skipped = buttonSequence = 0; rtt = null; pingAt = null; lastSentSample = -1;
+    sequence = sent = skipped = buttonSequence = 0; lastSentSample = -1;
     try {
       const current = new LanControllerTransport(window.ControllerConfig?.signalingUrl, lanSession,
         (state, detail) => { $('status').textContent = state + ' · ' + detail; });
-      socket = current; attach(current, null);
+      socket = current; attach(current);
     } catch (e) { lanStopped = true; reset(e.message); }
   }
   $('disconnect').addEventListener('click', () => { lanStopped = true; reset('Disconnected'); });
@@ -185,8 +167,7 @@
     Object.assign(p, { button: 'primary', phase, buttonSequence: ++buttonSequence,
       eventTimestamp: performance.now(), hasSnapshot: !!snapshot });
     if (!send(p)) {
-      if (lanSession) socket?.requestRecovery('Button delivery failed', true);
-      else reset('Button delivery failed. Reconnect and calibrate before throwing.');
+      socket?.requestRecovery('Button delivery failed', true);
       return false;
     }
     return phase !== 'canceled';
@@ -205,14 +186,6 @@
     if (document.hidden || !connected() || !freshOrientation() || now - lastSend < 1000 / 60 || orientation.timestamp === lastSentSample) return;
     if (send(packet('motion'))) { sent++; lastSentSample = orientation.timestamp; lastSend = now; }
   }, 8);
-  setInterval(() => {
-    if (lanSession || !connected()) return;
-    if (performance.now() - lastPong > 10000) { reset('Unity heartbeat timed out. Reconnect when the network is available.'); return; }
-    if (pingAt === null) {
-      pingAt = performance.now();
-      if (!send({ version: 1, type: 'ping', controllerId, timestamp: pingAt })) pingAt = null;
-    }
-  }, 1000);
   const format = v => v ? [v.x, v.y, v.z].map(n => n.toFixed(2)).join(' / ') : 'Unavailable';
   function updateScreenAngle() {
     const nextScreenAngle = readScreenAngle();
@@ -239,15 +212,14 @@
     $('screen').textContent = String(screenAngle);
     if (motionEnabled && performance.now() - enabledAt > 3000) $('motion-status').textContent = (freshOrientation() ? 'Receiving orientation.' : 'No fresh orientation. Keep the page visible; check permissions and sensor availability.') + motionNote;
     if ($('transport-log')) $('transport-log').textContent = socket?.diagnostics || 'No LAN diagnostics';
-    $('network').textContent = `Sent ${sent} · seq ${sequence} · skipped ${skipped} · buffered ${socket?.bufferedAmount || 0} B · RTT ${rtt === null ? '—' : rtt.toFixed(0) + ' ms'}`;
+    $('network').textContent = `Sent ${sent} · seq ${sequence} · skipped ${skipped} · buffered ${socket?.bufferedAmount || 0} B · ICE RTT ${socket?.iceRtt == null ? '—' : socket.iceRtt.toFixed(0) + ' ms'} · ${socket?.path || 'No connection'}`;
   }, 200);
   document.addEventListener('visibilitychange', () => {
-    if (lanSession && socket && !socket.closed) {
+    if (socket && !socket.closed) {
       if (document.hidden) holdButton.cancel();
       socket.setVisibility(document.hidden); return;
     }
-    if (document.hidden) reset('Paused while hidden. Return here and reconnect.');
-    else if (lanSession && !lanStopped) { retryCount = 0; startLan(); }
+    if (!document.hidden && lanSession && !lanStopped) { retryCount = 0; startLan(); }
   });
   window.addEventListener('pagehide', event => {
     if (event.persisted && lanSession) { holdButton.cancel(); socket?.setVisibility(true); return; }

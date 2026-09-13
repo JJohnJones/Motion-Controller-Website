@@ -14,6 +14,7 @@ function harness() {
     message(m) { this.dispatchEvent(new MessageEvent('message', {data:JSON.stringify(m)})); }
   }
   class Peer {
+    setConfiguration(c) { this.config = c; }
     constructor(config) { this.connectionState = 'connected'; this.config = config; this.ice = []; peers.push(this); }
     async setRemoteDescription(d) { this.remoteDescription = d; }
     async addIceCandidate(c) { this.ice.push(c); }
@@ -32,7 +33,7 @@ test('LAN adapter queues early ICE and accepts one ordered controller channel', 
   const {transport:t,socket:s,peers,timers}=harness();
   s.open(); assert.equal(s.sent[0].type,'join');
   const peer='b'.repeat(32);
-  s.message({type:'joined',peer,ticket:'c'.repeat(32)}); await t.work;
+  s.message({type:'joined',peer,ticket:'c'.repeat(32),iceConfig:{iceServers:[],mode:'all',expiresAt:Date.now()+600000}}); await t.work;
 
   s.message({type:'ice',peer,revision:1,candidate:'candidate:local',sdpMid:'0',sdpMLineIndex:0}); await t.work;
   assert.equal(t.pendingIce.length,1);
@@ -58,7 +59,7 @@ test('unexpected channels and malformed signaling cannot become controller input
 
 async function paired(h) {
  const t=h.transport; h.socket.open();
- await t.receive(JSON.stringify({type:'joined',peer:'b'.repeat(32),ticket:'c'.repeat(32)}));
+ await t.receive(JSON.stringify({type:'joined',peer:'b'.repeat(32),ticket:'c'.repeat(32),iceConfig:{iceServers:[],mode:'all',expiresAt:Date.now()+600000}}));
  await t.receive(JSON.stringify({type:'offer',peer:t.peer,revision:1,reset:true,sdp:'offer'}));
  const channel={label:'controller-v1',ordered:true,maxRetransmits:null,maxPacketLifeTime:null,readyState:'open',bufferedAmount:0,send(){},close(){this.readyState='closed';}};
  t.acceptChannel(channel); return channel;
@@ -91,4 +92,22 @@ test('host ICE restart keeps PeerConnection; replacement closes it and keeps tic
 test('background visibility retains DataChannel and identity', async()=>{
  const h=harness(),t=h.transport,ch=await paired(h);t.setVisibility(true);t.setVisibility(false);
  assert.equal(ch.readyState,'open');assert.equal(t.closed,false);assert.equal(t.peer,'b'.repeat(32));t.close();
+});
+
+
+test('ICE config refresh preserves identity, requests host restart and applies relay only when instructed',async()=>{
+ const h=harness(),t=h.transport;await paired(h);const pc=t.pc,ticket=t.ticket;
+ const config={mode:'relay',expiresAt:Date.now()+700000,iceServers:[{urls:['turns:turn.example:443?transport=tcp'],username:'temporary',credential:'password'}]};
+ await t.receive(JSON.stringify({type:'ice-config',iceConfig:config}));
+ assert.equal(t.pc,pc);assert.equal(t.ticket,ticket);assert.equal(pc.config.iceTransportPolicy,'relay');
+ assert.equal(pc.config.iceServers[0].credential,'password');assert.equal(h.socket.sent.at(-1).type,'restart-request');
+ assert.equal(t.logs.join('').includes('password'),false);
+ assert.throws(()=>t.applyIceConfig({...config,iceServers:[{urls:['https://bad.example']}]}),/Invalid ICE URLs/);t.close();
+});
+test('stats identify the selected pair rather than any available relay candidate',async()=>{
+ const h=harness(),t=h.transport;await paired(h);
+ const local={type:'local-candidate',candidateType:'host',protocol:'udp'},remote={type:'remote-candidate',candidateType:'host'};
+ const report=new Map([['transport',{type:'transport',selectedCandidatePairId:'pair'}],['pair',{type:'candidate-pair',localCandidateId:'l',remoteCandidateId:'r',currentRoundTripTime:0.02}],['l',local],['r',remote],['unused',{type:'local-candidate',candidateType:'relay'}]]);
+ t.pc.getStats=async()=>report;await t.readStats();assert.match(t.path,/Direct peer-to-peer/);assert.equal(t.iceRtt,20);
+ local.candidateType='relay';local.relayProtocol='tls';await t.readStats();assert.match(t.path,/TURN Relay/);assert.match(t.path,/tls/);t.close();
 });

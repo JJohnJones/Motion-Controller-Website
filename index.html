@@ -24,12 +24,6 @@
   <p class="intro">Connect your phone, enable motion, then hold it comfortably and calibrate.</p>
   <section aria-label="Connection">
     <p id="status" role="status">Scan the QR code displayed by your game to connect.</p>
-    <details><summary>Legacy WebSocket fallback</summary>
-    <label for="server">Secure WebSocket endpoint</label>
-    <input id="server" type="url" inputmode="url" placeholder="wss://your-tunnel.trycloudflare.com/controller" autocomplete="off" spellcheck="false">
-    <label for="token">Unity pairing token</label>
-    <input id="token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
-    </details>
     <div class="buttons"><button id="connect">Reconnect</button><button id="disconnect" disabled>Disconnect</button></div>
     <p>Controller ID: <code id="controller-id">—</code></p>
   </section>

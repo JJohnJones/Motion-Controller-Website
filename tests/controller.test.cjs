@@ -22,7 +22,10 @@ function harness(permissionFactory) {
   };
   class Socket {
     static OPEN = 1;
-    constructor(url) { this.url = url; this.readyState = 0; this.bufferedAmount = 0; this.handlers = {}; this.sent = []; sockets.push(this); }
+    constructor(url) { this.url = url; this.ticket = 'a'.repeat(32); this.readyState = 0; this.bufferedAmount = 0; this.handlers = {}; this.sent = []; sockets.push(this); }
+    requestRecovery(reason) { this.recovering = true; this.reason = reason; this.handlers.recovering?.(); }
+    setVisibility(hidden) { this.hidden = hidden; }
+    noteHeartbeat() { this.heartbeat = true; }
     addEventListener(type, fn) { this.handlers[type] = fn; }
     send(data) { this.sent.push(JSON.parse(data)); }
     close() { this.readyState = 3; this.handlers.close?.(); }
@@ -34,8 +37,8 @@ function harness(permissionFactory) {
   const document = { hidden: false, body: { classList: { toggle() {} } }, getElementById: element, addEventListener(type, fn) { documentEvents[type] = fn; } };
   const screen = { orientation: { angle: 0 } };
   const context = { window, document, screen, DeviceOrientationEvent: window.DeviceOrientationEvent, DeviceMotionEvent: window.DeviceMotionEvent,
-    MotionMath: math, HoldButton, location: { hash: '', pathname: '/', search: '' }, history: { replaceState() {} }, navigator: {},
-    URL, URLSearchParams, WebSocket: Socket, performance: { now: () => now },
+    MotionMath: math, HoldButton, location: { hash: '#session=' + 'a'.repeat(32), pathname: '/', search: '' }, history: { replaceState() {} }, navigator: {},
+    URL, URLSearchParams, WebSocket: Socket, LanControllerTransport: Socket, performance: { now: () => now },
     setInterval: (fn, delay) => intervals.push({fn, delay}), setTimeout: fn => { timeouts.set(++timer, fn); return timer; }, clearTimeout: id => timeouts.delete(id) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../controller.js'), 'utf8'), context);
   return { element, sockets, screen, document, windowEvents, documentEvents, timeouts,
@@ -44,8 +47,7 @@ function harness(permissionFactory) {
     async enable() { await element('enable-motion').handlers.click(); },
     orient() { windowEvents.deviceorientation({alpha: 30, beta: 20, gamma: 10, absolute: false}); },
     connect() {
-      element('server').value = 'wss://test.example/controller'; element('token').value = 'a'.repeat(32);
-      element('connect').handlers.click(); const s = sockets.at(-1); s.open();
+      const s = sockets.at(-1); s.open();
       s.receive({version: 1, type: 'welcome', controllerId: 'b'.repeat(32)}); return s;
     }
   };
@@ -58,10 +60,6 @@ test('both iOS permission requests happen before either promise resolves', async
   resolvers.forEach(resolve => resolve('granted')); await enabling;
   h.orient(); h.tick(200);
   assert.match(h.element('orientation').textContent, /30.0/);
-});
-test('insecure endpoints are rejected before constructing a socket', () => {
-  const h = harness(); h.element('server').value = 'ws://192.168.1.2/controller';
-  h.click('connect'); assert.equal(h.sockets.length, 0); assert.match(h.element('status').textContent, /wss:/);
 });
 test('pairing, sensor availability, snapshot calibration and acknowledgement', async () => {
   const h = harness(); const s = h.connect(); await h.enable(); h.orient();
@@ -84,15 +82,13 @@ test('stale samples and congestion do not accumulate a sensor send queue', async
   h.advance(20); h.tick(8); assert.equal(s.sent.length, 2); // same sample is not resent
   h.advance(300); h.tick(8); h.tick(200); assert.equal(s.sent.length, 2); assert.equal(h.element('calibrate').disabled, true);
 });
-test('screen changes require calibration, heartbeat measures RTT and hiding disconnects', async () => {
+test('screen changes require calibration and backgrounding retains the DataChannel', async () => {
   const h = harness(); const s = h.connect(); await h.enable(); h.orient();
   h.screen.orientation.angle = 90; h.tick(200); assert.match(h.element('calibration-status').textContent, /Screen orientation changed/);
-  h.tick(1000); const ping = s.sent.at(-1); h.advance(45);
-  s.receive({version:1,type:'pong',timestamp:ping.timestamp}); h.tick(200);
-  assert.match(h.element('network').textContent, /RTT 45 ms/);
-  h.document.hidden = true; h.documentEvents.visibilitychange(); assert.equal(s.readyState, 3);
-  assert.match(h.element('status').textContent, /Paused/);
+  h.document.hidden = true; h.documentEvents.visibilitychange(); assert.equal(s.readyState, 1);
+  assert.equal(s.hidden, true);
 });
+
 test('permission denial leaves a retry action and no false sensor stream', async () => {
   const h = harness(() => Promise.resolve('denied')); await h.enable();
   assert.match(h.element('motion-status').textContent, /denied/);
@@ -120,11 +116,11 @@ test('second fingers cannot release the primary hold and pointercancel never thr
   const buttons=s.sent.filter(p=>p.type==='button'); assert.deepEqual(buttons.map(p=>p.phase),['pressed','canceled']);
   assert.equal(buttons[1].hasSnapshot,false);
 });
-test('hidden pages cancel a hold; backed-up release closes connection instead of dropping silently', async () => {
+test('hidden pages cancel a hold; backed-up release enters recovery instead of dropping silently', async () => {
   const {h,s} = await bowlingReady(); h.pointer('pointerdown'); h.document.hidden=true; h.documentEvents.visibilitychange();
-  assert.equal(s.sent.at(-1).phase,'canceled'); assert.equal(s.readyState,3);
+  assert.equal(s.sent.at(-1).phase,'canceled'); assert.equal(s.readyState,1);
   const other = await bowlingReady(); other.h.pointer('pointerdown'); other.s.bufferedAmount=9000; other.h.pointer('pointerup');
-  assert.equal(other.s.readyState,3); assert.match(other.h.element('status').textContent,/delivery failed/);
+  assert.equal(other.s.recovering,true); assert.match(other.s.reason,/delivery failed/);
   assert.equal(other.s.sent.filter(p=>p.phase==='released').length,0);
 });
 test('uncalibrated or stale input cannot press; screen rotation cancels an existing hold', async () => {
