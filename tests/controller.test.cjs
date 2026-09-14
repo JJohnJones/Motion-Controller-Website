@@ -16,7 +16,7 @@ function harness(permissionFactory) {
   let now = 100, timer = 0;
   const element = id => {
     if (!elements.has(id)) elements.set(id, { value: '', textContent: '', disabled: false, handlers: {}, dataset: {},
-      setAttribute() {}, setPointerCapture(id) { this.captured = id; }, hasPointerCapture(id) { return this.captured === id; }, releasePointerCapture() { this.captured = null; },
+      children: [], append(...items) { this.children.push(...items); for (const item of items) if(item.id) elements.set(item.id, item); }, replaceChildren() { this.children = []; }, setAttribute() {}, setPointerCapture(id) { this.captured = id; }, hasPointerCapture(id) { return this.captured === id; }, releasePointerCapture() { this.captured = null; },
       addEventListener(type, fn) { this.handlers[type] = fn; } });
     return elements.get(id);
   };
@@ -34,21 +34,23 @@ function harness(permissionFactory) {
   }
   const device = permissionFactory || (() => Promise.resolve('granted'));
   const window = { isSecureContext: true, DeviceOrientationEvent: { requestPermission: device }, DeviceMotionEvent: { requestPermission: device }, addEventListener(type, fn) { windowEvents[type] = fn; } };
-  const document = { hidden: false, body: { classList: { toggle() {} } }, getElementById: element, addEventListener(type, fn) { documentEvents[type] = fn; } };
+  const document = { hidden: false, createElement: () => element('created-' + elements.size), body: { dataset: {}, classList: { toggle() {} } }, getElementById: element, addEventListener(type, fn) { documentEvents[type] = fn; } };
   const screen = { orientation: { angle: 0 } };
   const context = { window, document, screen, DeviceOrientationEvent: window.DeviceOrientationEvent, DeviceMotionEvent: window.DeviceMotionEvent,
     MotionMath: math, HoldButton, location: { hash: '#session=' + 'a'.repeat(32), pathname: '/', search: '' }, history: { replaceState() {} }, navigator: {},
     URL, URLSearchParams, WebSocket: Socket, LanControllerTransport: Socket, performance: { now: () => now },
     setInterval: (fn, delay) => intervals.push({fn, delay}), setTimeout: fn => { timeouts.set(++timer, fn); return timer; }, clearTimeout: id => timeouts.delete(id) };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../controller.js'), 'utf8'), context);
-  return { element, sockets, screen, document, windowEvents, documentEvents, timeouts,
+  vm.createContext(context);
+  for (const file of ['controller-layouts.js', 'controller-ui.js', 'controller.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../' + file), 'utf8'), context);
+  return { element, sockets, screen, document, windowEvents, documentEvents, timeouts, modes: context.ControllerLayouts.modes,
     click: id => element(id).handlers.click(), advance: ms => { now += ms; }, tick: delay => intervals.find(t => t.delay === delay).fn(),
     pointer: (type, id = 1) => element('hold-ball').handlers[type]({ pointerId: id, button: 0, isPrimary: true, preventDefault() {} }),
     async enable() { await element('enable-motion').handlers.click(); },
     orient() { windowEvents.deviceorientation({alpha: 30, beta: 20, gamma: 10, absolute: false}); },
     connect() {
       const s = sockets.at(-1); s.open();
-      s.receive({version: 1, type: 'welcome', controllerId: 'b'.repeat(32)}); return s;
+      s.receive({version: 1, type: 'welcome', controllerId: 'b'.repeat(32), playerNumber: 1});
+      s.receive({version:1,type:'ui-mode',mode:'bowling',paused:false}); return s;
     }
   };
 }
@@ -127,5 +129,49 @@ test('uncalibrated or stale input cannot press; screen rotation cancels an exist
   const h=harness(); const s=h.connect(); await h.enable(); h.orient(); h.pointer('pointerdown');
   assert.equal(s.sent.filter(p=>p.type==='button').length,0);
   const ready=await bowlingReady(); ready.h.pointer('pointerdown'); ready.h.screen.orientation.angle=90; ready.h.tick(200);
-  assert.equal(ready.s.sent.at(-1).phase,'canceled'); assert.equal(ready.h.element('hold-ball').disabled,true);
+  assert.equal(ready.s.sent.at(-1).phase,'canceled'); assert.equal(ready.h.document.body.dataset.screen,'setup');
+});
+
+
+test('menu, full-screen game, pause and recovery preserve motion and requested mode', async () => {
+  const {h,s} = await bowlingReady();
+  assert.equal(h.document.body.dataset.screen, 'gameplay');
+  s.receive({version:1,type:'ui-mode',mode:'menu'});
+  assert.equal(h.document.body.dataset.screen, 'waiting');
+  h.advance(20); h.orient(); h.tick(8);
+  assert.equal(s.sent.at(-1).type, 'motion');
+  s.receive({version:1,type:'ui-mode',mode:'bowling'}); h.pointer('pointerdown');
+  s.receive({version:1,type:'ui-mode',mode:'bowling',paused:true});
+  assert.equal(s.sent.at(-1).phase, 'canceled');
+  assert.equal(h.document.body.dataset.screen, 'paused');
+  s.receive({version:1,type:'ui-mode',mode:'bowling',paused:false});
+  s.requestRecovery('Wi-Fi interrupted');
+  assert.equal(h.document.body.dataset.screen, 'recovering');
+  const count = s.sent.length; h.pointer('pointerdown'); assert.equal(s.sent.length, count);
+  s.recovering = false; s.handlers.recovered();
+  assert.equal(h.document.body.dataset.screen, 'gameplay');
+  assert.equal(h.element('debug-panel').hidden, true);
+  h.pointer('pointerdown'); assert.equal(s.sent.at(-1).phase, 'pressed');
+});
+
+test('leaving game while held sends cancel, never a throw', async () => {
+  const {h,s} = await bowlingReady(); h.pointer('pointerdown');
+  s.receive({version:1,type:'ui-mode',mode:'menu'}); h.pointer('pointerup');
+  assert.deepEqual(s.sent.filter(p=>p.type==='button').map(p=>p.phase), ['pressed','canceled']);
+});
+
+
+test('split zones capture independent fingers and cancel both on mode exit', async () => {
+  const {h,s} = await bowlingReady();
+  h.modes.future = {layout:'double',buttons:[
+    {id:'primary',idle:'A',pressed:'Held A'}, {id:'secondary',idle:'B',pressed:'Held B'}
+  ]};
+  s.receive({version:1,type:'ui-mode',mode:'future'});
+  const touch=(zone,type,id,primary)=>h.element(zone).handlers[type]({pointerId:id,button:0,isPrimary:primary,preventDefault(){}});
+  touch('zone-0','pointerdown',1,true); touch('zone-1','pointerdown',2,false);
+  assert.deepEqual(s.sent.filter(p=>p.type==='button').map(p=>[p.button,p.phase]), [['primary','pressed'],['secondary','pressed']]);
+  touch('zone-0','pointerup',2,false);
+  assert.equal(h.element('zone-0').dataset.phase,'held');
+  s.receive({version:1,type:'ui-mode',mode:'menu'});
+  assert.deepEqual(s.sent.filter(p=>p.type==='button').slice(-2).map(p=>p.phase), ['canceled','canceled']);
 });

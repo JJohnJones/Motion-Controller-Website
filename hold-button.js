@@ -1,7 +1,7 @@
 'use strict';
 // Pointer handling is independent of sensors, networking and bowling rules.
 (function (root) {
-  function bindHoldButton(element, { canPress, onTransition, onState }) {
+  function bindHoldButton(element, { canPress, onTransition, onState, primaryOnly = true }) {
     let pointerId = null;
     const state = phase => {
       element.dataset.phase = phase;
@@ -16,7 +16,7 @@
       if (notify && onTransition(phase) === false) state('canceled');
     }
     element.addEventListener('pointerdown', event => {
-      if (pointerId !== null || !event.isPrimary || event.button !== 0 || !canPress()) return;
+      if (pointerId !== null || (primaryOnly && !event.isPrimary) || event.button !== 0 || !canPress()) return;
       event.preventDefault(); pointerId = event.pointerId;
       try { element.setPointerCapture(pointerId); }
       catch { pointerId = null; state('canceled'); return; }

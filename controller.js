@@ -9,20 +9,18 @@
   let sent = 0, skipped = 0;
   let calibrationSequence = null, calibrationSentAt = 0;
   let calibrated = false, buttonSequence = 0;
-  const holdButton = HoldButton.bindHoldButton($('hold-ball'), {
+  let uiMode = 'menu', paused = false, playerNumber = 0, setupRequested = false;
+  const debug = new URLSearchParams(location.search).get('debug') === '1';
+  const holdButton = ControllerUI.create({ document,
     canPress: () => connected() && calibrated && freshOrientation() && !document.hidden,
-    onTransition: sendButton,
-    onState: phase => {
-      document.body.classList.toggle('holding-ball', phase === 'held');
-      $('hold-ball').textContent = phase === 'held' ? 'HELD — LIFT TO RELEASE' : 'HOLD BALL';
-      $('hold-status').textContent = {
-        idle: 'Not pressed — connect and calibrate first.',
-        held: 'Held — swing, then lift your finger. Unity accepts a new hold only while Ready.',
-        released: 'Released — see Unity for the throw result. Wait for reset.',
-        canceled: 'Canceled — no throw. Press again when ready.'
-      }[phase];
-    }
+    onTransition: sendButton
   });
+  function renderUi() {
+    holdButton.render({ connected: connected(), recovering: !!socket?.recovering,
+      motionEnabled, calibrated, mode: uiMode, paused, playerNumber, setup: setupRequested,
+      status: $('status').textContent, debug });
+  }
+  $('setup').addEventListener('click', () => { setupRequested = true; renderUi(); });
   const fragment = new URLSearchParams(location.hash.slice(1));
   const lanSession = fragment.get('session');
   let lanStopped = false, retryTimer = null, retryCount = 0;
@@ -42,9 +40,10 @@
     const old = socket; socket = null; controllerId = ''; calibrationSequence = null;
     if (old) old.close();
     $('status').textContent = reason;
-    $('controller-id').textContent = '—';
+    $('controller-id').textContent = '—'; playerNumber = 0;
     $('connect').disabled = false; $('disconnect').disabled = true;
     $('calibration-status').textContent = 'Calibration required after connecting.';
+    renderUi();
     if (lanSession && !lanStopped && !document.hidden && retryCount < 5)
       retryTimer = setTimeout(startLan, Math.min(10000, 1000 * 2 ** retryCount++));
   }
@@ -65,8 +64,8 @@
       $('status').textContent = 'Connected to endpoint; pairing…';
       send({ version: 1, type: 'hello', token: current.ticket });
     });
-    current.addEventListener('recovering', () => { if (socket === current) holdButton.cancel(); });
-    current.addEventListener('recovered', () => { if (socket === current) $('status').textContent = 'Connected · LAN WebRTC'; });
+    current.addEventListener('recovering', () => { if (socket === current) { holdButton.cancel(); renderUi(); } });
+    current.addEventListener('recovered', () => { if (socket === current) { $('status').textContent = 'Connected · LAN WebRTC'; renderUi(); } });
     current.addEventListener('message', event => {
       if (socket !== current) return;
       let reply;
@@ -75,18 +74,21 @@
       if (reply.type === 'welcome' && /^[a-f0-9]{32}$/.test(reply.controllerId)) {
         retryCount = 0;
         if (controllerId && controllerId !== reply.controllerId) calibrated = false;
-        controllerId = reply.controllerId;
+        controllerId = reply.controllerId; playerNumber = reply.playerNumber || 0;
         $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
         $('status').textContent = 'Connected · WebRTC';
+      } else if (reply.type === 'ui-mode' && typeof reply.mode === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(reply.mode)) {
+        uiMode = reply.mode; paused = reply.paused === true; renderUi();
       } else if (reply.type === 'serverPing' && Number.isFinite(reply.timestamp) && reply.controllerId === controllerId) {
         if (send({ version: 1, type: 'serverPong', controllerId, timestamp: reply.timestamp })) current.noteHeartbeat?.();
 
       } else if (reply.type === 'calibrated' && reply.sequence === calibrationSequence) {
         calibrationSequence = null;
-        calibrated = true;
+        calibrated = true; setupRequested = false;
         $('calibration-status').textContent = 'Calibrated. Aim, hold the ball button, swing, then release.';
-        $('hold-status').textContent = 'Not pressed — ready to hold. Check Unity is Ready.';
+        renderUi();
       }
+      renderUi();
     });
     current.addEventListener('close', () => {
       if (socket !== current) return;
@@ -142,7 +144,7 @@
       motionEnabled = true; enabledAt = performance.now(); $('enable-motion').disabled = true;
       $('motion-status').textContent = 'Permission granted; waiting for sensor readings.' + motionNote;
     } catch (e) { $('motion-status').textContent = e.message; }
-    finally { enabling = false; }
+    finally { enabling = false; renderUi(); }
   });
 
   function packet(type) {
@@ -156,7 +158,7 @@
       accelerationIncludingGravity: m?.gravity || ZERO,
       hasAngularVelocity: !!m?.angularVelocity, hasAcceleration: !!m?.acceleration, hasGravity: !!m?.gravity };
   }
-  function sendButton(phase) {
+  function sendButton(phase, button = 'primary') {
     if (!connected()) return false;
     updateScreenAngle();
     // Cancellation never becomes a release. If required input cannot be sent, disconnect
@@ -164,7 +166,7 @@
     if (phase !== 'canceled' && (!calibrated || !freshOrientation())) phase = 'canceled';
     const snapshot = phase !== 'canceled' && freshOrientation();
     const p = snapshot ? packet('button') : { version: 1, type: 'button', controllerId };
-    Object.assign(p, { button: 'primary', phase, buttonSequence: ++buttonSequence,
+    Object.assign(p, { button, phase, buttonSequence: ++buttonSequence,
       eventTimestamp: performance.now(), hasSnapshot: !!snapshot });
     if (!send(p)) {
       socket?.requestRecovery('Button delivery failed', true);
@@ -198,8 +200,7 @@
   setInterval(() => {
     updateScreenAngle();
     if (holdButton.held && (!connected() || !calibrated || !freshOrientation())) holdButton.cancel();
-    // Keep an active pointer enabled until its release/cancellation has been handled.
-    $('hold-ball').disabled = !holdButton.held && (!connected() || !calibrated || !freshOrientation());
+    renderUi();
     $('calibrate').disabled = !connected() || !freshOrientation() || calibrationSequence !== null;
     if (calibrationSequence !== null && performance.now() - calibrationSentAt > 5000) {
       calibrationSequence = null; $('calibration-status').textContent = 'Calibration acknowledgement timed out. Try again.';
@@ -226,6 +227,7 @@
     lanStopped = true; reset('Browser page closed');
   });
   window.addEventListener('pageshow', () => { if (lanSession) socket?.setVisibility(false); });
+  renderUi();
   if (lanSession) startLan();
   if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./service-worker.js').catch(() => {
     $('status').textContent += ' (Offline installation unavailable; online control still works.)';
