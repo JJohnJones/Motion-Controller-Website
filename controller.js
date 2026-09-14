@@ -76,7 +76,7 @@
         retryCount = 0;
         if (controllerId && controllerId !== reply.controllerId) calibrated = false;
         controllerId = reply.controllerId;
-            $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
+        $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
         $('status').textContent = 'Connected · WebRTC';
       } else if (reply.type === 'serverPing' && Number.isFinite(reply.timestamp) && reply.controllerId === controllerId) {
         if (send({ version: 1, type: 'serverPong', controllerId, timestamp: reply.timestamp })) current.noteHeartbeat?.();
