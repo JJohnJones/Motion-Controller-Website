@@ -53,6 +53,12 @@
       $('recovering-message').textContent = state.status || 'Restoring your controller…';
       $('player-name').textContent = state.playerNumber ? `PLAYER ${state.playerNumber}` : 'CONTROLLER READY';
       $('setup-player').textContent = state.playerNumber ? `PLAYER ${state.playerNumber}` : 'CONNECTED';
+      $('setup-title').textContent = ControllerLayouts.modes[state.mode] ? `${state.mode.toUpperCase()} SETUP` : 'GET READY';
+      $('setup-required').textContent = !state.motionEnabled ? 'Tap Enable Motion to use your phone as a racket or controller.' :
+        !state.calibrated ? 'Hold your phone in a comfortable ready pose and tap Calibrate. Your game controls open after Unity confirms it.' :
+        'Motion and calibration are ready. Continue to your controller.';
+      $('setup-done').hidden = !state.motionEnabled || !state.calibrated;
+
       $('debug-panel').hidden = !state.debug || screen === 'gameplay';
     }
     return { render, cancel, reset: () => bindings.forEach(b => b.reset()),

@@ -193,3 +193,22 @@ test('Tennis serve surface becomes motion-only rally and waiting feedback', asyn
   s.receive({version:1,type:'ui-mode',mode:'tennis',state:'waiting'});
   assert.equal(zone.children[0].textContent,'WAITING');
 });
+
+
+test('Tennis setup explains requirements, then calibration opens the racket surface', async () => {
+  const h=harness();const s=h.connect();
+  s.receive({version:1,type:'ui-mode',mode:'tennis',state:'serve'});
+  assert.equal(h.document.body.dataset.screen,'setup');
+  assert.equal(h.element('setup-title').textContent,'TENNIS SETUP');
+  assert.match(h.element('setup-required').textContent,/Enable Motion/);
+  await h.enable();h.orient();h.tick(200);
+  assert.match(h.element('setup-required').textContent,/tap Calibrate/);
+  h.click('calibrate');s.receive({version:1,type:'calibrated',sequence:s.sent.at(-1).sequence});
+  assert.equal(h.document.body.dataset.screen,'gameplay');
+  s.receive({version:1,type:'ui-mode',mode:'menu'});h.click('setup');
+  assert.equal(h.document.body.dataset.screen,'setup');
+  assert.equal(h.element('setup-done').hidden,false);h.click('setup-done');
+  assert.equal(h.document.body.dataset.screen,'waiting');
+  h.click('setup');s.receive({version:1,type:'ui-mode',mode:'tennis',state:'serve'});
+  assert.equal(h.document.body.dataset.screen,'gameplay');
+});

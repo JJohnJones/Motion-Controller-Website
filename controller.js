@@ -21,6 +21,7 @@
       status: $('status').textContent, debug });
   }
   $('setup').addEventListener('click', () => { setupRequested = true; renderUi(); });
+  $('setup-done').addEventListener('click', () => { if (motionEnabled && calibrated) { setupRequested = false; renderUi(); } });
   const fragment = new URLSearchParams(location.hash.slice(1));
   const lanSession = fragment.get('session');
   let lanStopped = false, retryTimer = null, retryCount = 0;
@@ -78,6 +79,7 @@
         $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
         $('status').textContent = 'Connected · WebRTC';
       } else if (reply.type === 'ui-mode' && typeof reply.mode === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(reply.mode)) {
+        if (reply.mode !== uiMode && ControllerLayouts.modes[reply.mode] && motionEnabled && calibrated) setupRequested = false;
         uiMode = reply.mode; gameState = typeof reply.state === 'string' ? reply.state : ''; paused = reply.paused === true; renderUi();
       } else if (reply.type === 'serverPing' && Number.isFinite(reply.timestamp) && reply.controllerId === controllerId) {
         if (send({ version: 1, type: 'serverPong', controllerId, timestamp: reply.timestamp })) current.noteHeartbeat?.();

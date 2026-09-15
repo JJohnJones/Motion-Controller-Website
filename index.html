@@ -28,12 +28,14 @@
     <button id="connect">Reconnect</button>
   </section>
   <section id="screen-setup" class="screen" hidden>
-    <h2 id="setup-player">CONNECTED</h2><h1>GET READY</h1>
+    <h2 id="setup-player">CONNECTED</h2><h1 id="setup-title">GET READY</h1>
+    <p id="setup-required" role="status"></p>
     <p>Enable motion, then hold your phone screen-up with its top pointing down the lane and calibrate.</p>
     <button id="enable-motion">Enable Motion</button>
     <p id="motion-status" role="status">Motion has not been enabled.</p>
     <button id="calibrate" disabled>Calibrate</button>
     <p id="calibration-status" role="status">Calibration required after connecting.</p>
+    <button id="setup-done" hidden>Continue to controller</button>
   </section>
   <section id="screen-waiting" class="screen" hidden>
     <h2 id="player-name">CONTROLLER READY</h2><div class="orb" aria-hidden="true"></div>
