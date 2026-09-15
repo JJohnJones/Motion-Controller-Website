@@ -26,3 +26,5 @@ body[data-screen="gameplay"] { overflow: hidden; overscroll-behavior: none; }
 #debug-panel pre, #debug-panel code { overflow-wrap: anywhere; white-space: pre-wrap; }
 #debug-panel dt { margin-top: 12px; } #debug-panel dd { margin-left: 0; }
 @media (orientation: landscape) { .screen { gap: 8px; } .orb { width: 60px; height: 60px; } .control-zone { gap: 14px; } }
+
+.mode-status { font-size: 13px; opacity: .85; }

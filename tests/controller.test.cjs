@@ -212,3 +212,13 @@ test('Tennis setup explains requirements, then calibration opens the racket surf
   h.click('setup');s.receive({version:1,type:'ui-mode',mode:'tennis',state:'serve'});
   assert.equal(h.document.body.dataset.screen,'gameplay');
 });
+
+
+test('waiting screen exposes received mode instead of masking unsupported layouts', async () => {
+ const {h,s}=await bowlingReady();
+ s.receive({version:1,type:'ui-mode',mode:'future-missing'});
+ assert.equal(h.document.body.dataset.screen,'waiting');
+ assert.match(h.element('mode-status').textContent,/future-missing.*does not support/);
+ s.receive({version:1,type:'ui-mode',mode:'menu'});
+ assert.match(h.element('mode-status').textContent,/Game mode: menu/);
+});

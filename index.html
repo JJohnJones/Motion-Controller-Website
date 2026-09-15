@@ -10,15 +10,15 @@
   <meta name="referrer" content="no-referrer">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=10">
   <title>Motion Controller</title>
-  <script defer src="./motion-math.js"></script>
-  <script defer src="./hold-button.js"></script>
-  <script defer src="./config.js"></script>
-  <script defer src="./lan-transport.js"></script>
-  <script defer src="./controller-layouts.js"></script>
-  <script defer src="./controller-ui.js"></script>
-  <script defer src="./controller.js"></script>
+  <script defer src="./motion-math.js?v=10"></script>
+  <script defer src="./hold-button.js?v=10"></script>
+  <script defer src="./config.js?v=10"></script>
+  <script defer src="./lan-transport.js?v=10"></script>
+  <script defer src="./controller-layouts.js?v=10"></script>
+  <script defer src="./controller-ui.js?v=10"></script>
+  <script defer src="./controller.js?v=10"></script>
 </head>
 <body>
 <main>
@@ -41,6 +41,7 @@
     <h2 id="player-name">CONTROLLER READY</h2><div class="orb" aria-hidden="true"></div>
     <h1>READY TO PLAY</h1><p>Choose a game on the big screen.</p>
     <button id="setup">Calibrate / Setup</button>
+    <p id="mode-status" class="mode-status" role="status"></p>
   </section>
   <section id="screen-gameplay" hidden><div id="gameplay" aria-label="Game controls"></div></section>
   <section id="screen-paused" class="screen" hidden><h1>PAUSED</h1><p>Resume on the big screen.</p></section>

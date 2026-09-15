@@ -51,6 +51,7 @@
         $('screen-' + name).hidden = name !== screen;
       $('connection-message').textContent = state.status || 'Scan the QR code displayed by your game.';
       $('recovering-message').textContent = state.status || 'Restoring your controller…';
+      $('mode-status').textContent = `Game mode: ${state.mode} · Controller v10` + (ControllerLayouts.modes[state.mode] || ['menu','waiting','pairing','connection'].includes(state.mode) ? '' : ' · This controller version does not support that game. Reopen the updated website.');
       $('player-name').textContent = state.playerNumber ? `PLAYER ${state.playerNumber}` : 'CONTROLLER READY';
       $('setup-player').textContent = state.playerNumber ? `PLAYER ${state.playerNumber}` : 'CONNECTED';
       $('setup-title').textContent = ControllerLayouts.modes[state.mode] ? `${state.mode.toUpperCase()} SETUP` : 'GET READY';
