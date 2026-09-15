@@ -175,3 +175,21 @@ test('split zones capture independent fingers and cancel both on mode exit', asy
   s.receive({version:1,type:'ui-mode',mode:'menu'});
   assert.deepEqual(s.sent.filter(p=>p.type==='button').slice(-2).map(p=>p.phase), ['canceled','canceled']);
 });
+
+
+test('Tennis serve surface becomes motion-only rally and waiting feedback', async () => {
+  const {h,s}=await bowlingReady();
+  s.receive({version:1,type:'ui-mode',mode:'tennis',state:'serve'});
+  const zone=h.element('zone-0');
+  zone.handlers.pointerdown({pointerId:1,button:0,isPrimary:true,preventDefault(){}});
+  assert.equal(s.sent.at(-1).phase,'pressed');
+  s.receive({version:1,type:'ui-mode',mode:'tennis',state:'rally'});
+  assert.equal(s.sent.at(-1).phase,'canceled');
+  const count=s.sent.length;
+  zone.handlers.pointerdown({pointerId:2,button:0,isPrimary:true,preventDefault(){}});
+  assert.equal(s.sent.length,count);
+  assert.equal(zone.children[1].textContent,'SWING!');
+  h.advance(20);h.orient();h.tick(8);assert.equal(s.sent.at(-1).type,'motion');
+  s.receive({version:1,type:'ui-mode',mode:'tennis',state:'waiting'});
+  assert.equal(zone.children[0].textContent,'WAITING');
+});

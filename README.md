@@ -1,3 +1,9 @@
+## Tennis mode
+
+Deploy the current controller files with the updated Unity Tennis module. Cache version is `motion-controller-shell-v8-tennis`; close/reopen old controller windows after deployment. No backend update is needed.
+
+The `tennis` layout uses optional `ui-mode.state` values: `serve` (full-screen tap to toss), `rally` (motion-only SWING feedback), and `waiting`. Only the serve state sends primary button events. Unity handles toss timing and swing contact; touch release does not hit the ball. Setup, calibration and recovery are unchanged. Try serving, rallying, pausing and returning to Game Select with 1–4 phones.
+
 # Controller screens update
 
 The phone now has Connecting, Setup, Waiting, Gameplay, Paused, and Recovering screens. Pair as usual, tap **Enable Motion**, and **Calibrate**. Calibration acknowledgement enters Waiting (or the current game if already running). Waiting offers **Calibrate / Setup**. Unity selects Bowling automatically; the whole usable viewport is one hold/release surface. No setup/debug controls appear over it. Browser chrome remains controlled by Safari/Chrome; adding the PWA to the home screen gives a standalone surface.
@@ -37,7 +43,7 @@ The only controller transport is WebRTC DataChannel. Scan Unity's HTTPS QR link,
 
 `config.js` contains only the public signaling URL. `lan-transport.js` receives expiring ICE configuration from authenticated signaling, configures STUN and TURN UDP/TCP/TLS candidates, and performs host-owned negotiation/recovery. Neither the permanent Cloudflare API token nor static TURN passwords belong here. See the separate signaling repository's **TURN_SETUP.md** for Render configuration and deployment instructions.
 
-Deploy backend changes first, then all changed PWA files. The service-worker version is `motion-controller-shell-v7-controller-modes`; close old tabs/installed-app instances and reopen to update. It caches only static assets, never tickets, credentials or sensor frames. Offline app opening does not provide offline signaling.
+Deploy backend changes first, then all changed PWA files. The service-worker version is `motion-controller-shell-v8-tennis`; close old tabs/installed-app instances and reopen to update. It caches only static assets, never tickets, credentials or sensor frames. Offline app opening does not provide offline signaling.
 
 Normal ICE policy is `all`, permitting direct or TURN paths. A backend-authorized diagnostic session may use relay-only or direct-only, selected by Unity's development setting. The phone needs no configuration. Connection diagnostics report the selected candidate pair, protocol/relay protocol, ICE RTT and state/error timestamps. Unity separately reports application heartbeat RTT. Neither is a measured one-way motion latency.
 

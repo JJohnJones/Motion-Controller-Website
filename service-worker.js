@@ -1,6 +1,6 @@
 'use strict';
 // Bump VERSION whenever shell assets change. No sensor samples or tokens are cached.
-const VERSION = 'motion-controller-shell-v7-controller-modes';
+const VERSION = 'motion-controller-shell-v8-tennis';
 const ASSETS = ['./', './index.html', './styles.css', './motion-math.js', './hold-button.js', './controller.js', './controller-layouts.js', './controller-ui.js', './config.js', './lan-transport.js', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(ASSETS)));

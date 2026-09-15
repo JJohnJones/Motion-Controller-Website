@@ -9,7 +9,7 @@
   let sent = 0, skipped = 0;
   let calibrationSequence = null, calibrationSentAt = 0;
   let calibrated = false, buttonSequence = 0;
-  let uiMode = 'menu', paused = false, playerNumber = 0, setupRequested = false;
+  let gameState = '', uiMode = 'menu', paused = false, playerNumber = 0, setupRequested = false;
   const debug = new URLSearchParams(location.search).get('debug') === '1';
   const holdButton = ControllerUI.create({ document,
     canPress: () => connected() && calibrated && freshOrientation() && !document.hidden,
@@ -17,7 +17,7 @@
   });
   function renderUi() {
     holdButton.render({ connected: connected(), recovering: !!socket?.recovering,
-      motionEnabled, calibrated, mode: uiMode, paused, playerNumber, setup: setupRequested,
+      motionEnabled, calibrated, mode: uiMode, gameState, paused, playerNumber, setup: setupRequested,
       status: $('status').textContent, debug });
   }
   $('setup').addEventListener('click', () => { setupRequested = true; renderUi(); });
@@ -78,7 +78,7 @@
         $('controller-id').textContent = reply.playerNumber ? `Player ${reply.playerNumber} · ${controllerId}` : controllerId;
         $('status').textContent = 'Connected · WebRTC';
       } else if (reply.type === 'ui-mode' && typeof reply.mode === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(reply.mode)) {
-        uiMode = reply.mode; paused = reply.paused === true; renderUi();
+        uiMode = reply.mode; gameState = typeof reply.state === 'string' ? reply.state : ''; paused = reply.paused === true; renderUi();
       } else if (reply.type === 'serverPing' && Number.isFinite(reply.timestamp) && reply.controllerId === controllerId) {
         if (send({ version: 1, type: 'serverPong', controllerId, timestamp: reply.timestamp })) current.noteHeartbeat?.();
 

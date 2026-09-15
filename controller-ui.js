@@ -9,10 +9,10 @@
   }
   function create({ document, canPress, onTransition }) {
     const $ = id => document.getElementById(id);
-    let bindings = [], currentMode = null, currentScreen = null, state = {};
+    let bindings = [], currentMode = null, currentScreen = null, state = {}, presenters = [], lastPhase = null;
     function cancel() { bindings.forEach(b => b.cancel()); }
     function build(mode) {
-      cancel(); bindings = []; currentMode = mode;
+      cancel(); bindings = []; presenters = []; currentMode = mode;
       const surface = $('gameplay'); surface.replaceChildren();
       const config = ControllerLayouts.modes[mode];
       if (!ControllerLayouts.valid(config)) return;
@@ -24,21 +24,28 @@
         hint.textContent = button.hint || 'READY'; zone.append(hint, label); surface.append(zone);
         bindings.push(HoldButton.bindHoldButton(zone, {
           primaryOnly: config.buttons.length === 1,
-          canPress: () => currentScreen === 'gameplay' && canPress(),
+          canPress: () => currentScreen === 'gameplay' && (!button.states || button.states[state.gameState]?.enabled === true) && canPress(),
           onTransition: phase => onTransition(phase, button.id),
           onState: phase => {
-            label.textContent = phase === 'held' ? button.pressed : button.idle;
-            hint.textContent = phase === 'held' ? 'HELD' : phase === 'released' ? 'RELEASED' : button.hint || 'READY';
+            const variant = button.states?.[state.gameState] || button;
+            label.textContent = phase === 'held' ? button.pressed : variant.idle;
+            hint.textContent = phase === 'held' ? 'HELD' : phase === 'released' ? 'RELEASED' : (button.states?.[state.gameState]?.hint || button.hint || 'READY');
           }
         }));
+        presenters.push(() => {
+          if (zone.dataset.phase === 'held') return;
+          const variant = button.states?.[state.gameState] || button;
+          label.textContent = variant.idle; hint.textContent = variant.hint || 'READY';
+        });
       });
     }
     function render(next) {
       state = next;
       const screen = screenFor(state, ControllerLayouts.modes);
-      if (screen !== currentScreen || currentMode !== state.mode) cancel();
+      if (screen !== currentScreen || currentMode !== state.mode || lastPhase !== state.gameState) cancel();
+      lastPhase = state.gameState;
       if (currentMode !== state.mode) build(state.mode);
-      currentScreen = screen;
+      currentScreen = screen; presenters.forEach(show => show());
       document.body.dataset.screen = screen;
       for (const name of ['connecting', 'setup', 'waiting', 'gameplay', 'paused', 'recovering'])
         $('screen-' + name).hidden = name !== screen;

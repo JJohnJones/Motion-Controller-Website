@@ -2,6 +2,14 @@
 // Action IDs are protocol values, never DOM IDs. Add future game definitions here.
 (function(root) {
   const modes = {
+    tennis: { layout: 'single', buttons: [
+      { id: 'primary', idle: 'TAP TO TOSS\nTHEN SWING', pressed: 'PREPARE TO SWING', hint: 'YOUR SERVE',
+        states: {
+          serve: { idle: 'TAP TO TOSS\nTHEN SWING', hint: 'YOUR SERVE', enabled: true },
+          rally: { idle: 'SWING!', hint: 'RALLY', enabled: false },
+          waiting: { idle: 'GET READY', hint: 'WAITING', enabled: false }
+        } }
+    ] },
     bowling: { layout: 'single', buttons: [
       { id: 'primary', idle: 'HOLD SCREEN\nTO HOLD BALL', pressed: 'BALL HELD\nSWING AND RELEASE', hint: 'READY' }
     ] }
