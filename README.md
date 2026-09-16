@@ -1,3 +1,9 @@
+## Sword Duel mode
+
+The `sword` layout uses existing per-controller UI states: `ready`, `guard`, `attack`, `stagger`, and `waiting`. Before each round, hold the phone in a comfortable sword-ready pose and tap the full-screen surface. Unity captures a Sword-specific neutral pose and readies that player. Combat remains motion-only; the touch action is disabled until the next ready phase. Existing motion, pairing and recovery are unchanged.
+
+Deploy these files to the existing HTTPS host and close/reopen controller windows for cache **v11-sword**. No signaling-server update is required. Test 1-player AI and 2-player local duels, readiness, pause, results and returning to menus. Unity documentation: `Documentation/SWORD_DUEL.md`.
+
 ## Tennis mode
 
 Deploy the current controller files with the updated Unity Tennis module. Cache version is `motion-controller-shell-v8-tennis`; close/reopen old controller windows after deployment. No backend update is needed.

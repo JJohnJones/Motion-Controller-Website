@@ -1,7 +1,7 @@
 'use strict';
 // Bump VERSION whenever shell assets change. No sensor samples or tokens are cached.
-const VERSION = 'motion-controller-shell-v10-mode-sync';
-const ASSETS = ['./', './index.html', './styles.css?v=10', './motion-math.js?v=10', './hold-button.js?v=10', './controller.js?v=10', './controller-layouts.js?v=10', './controller-ui.js?v=10', './config.js?v=10', './lan-transport.js?v=10', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
+const VERSION = 'motion-controller-shell-v11-sword';
+const ASSETS = ['./', './index.html', './styles.css?v=11', './motion-math.js?v=11', './hold-button.js?v=11', './controller.js?v=11', './controller-layouts.js?v=11', './controller-ui.js?v=11', './config.js?v=11', './lan-transport.js?v=11', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(VERSION).then(cache => cache.addAll(ASSETS)));
 });

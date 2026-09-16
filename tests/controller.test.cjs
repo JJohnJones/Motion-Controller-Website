@@ -222,3 +222,15 @@ test('waiting screen exposes received mode instead of masking unsupported layout
  s.receive({version:1,type:'ui-mode',mode:'menu'});
  assert.match(h.element('mode-status').textContent,/Game mode: menu/);
 });
+
+
+test('Sword readies through primary input then remains motion-only during combat', async () => {
+ const {h,s}=await bowlingReady();s.receive({version:1,type:'ui-mode',mode:'sword',state:'ready'});
+ const zone=h.element('zone-0');zone.handlers.pointerdown({pointerId:1,button:0,isPrimary:true,preventDefault(){}});
+ assert.equal(s.sent.at(-1).phase,'pressed');
+ s.receive({version:1,type:'ui-mode',mode:'sword',state:'guard'});
+ const count=s.sent.length;zone.handlers.pointerdown({pointerId:2,button:0,isPrimary:true,preventDefault(){}});assert.equal(s.sent.length,count);
+ assert.match(zone.children[1].textContent,/MOVE SWORD TO GUARD/);
+ h.advance(20);h.orient();h.tick(8);assert.equal(s.sent.at(-1).type,'motion');
+ s.receive({version:1,type:'ui-mode',mode:'sword',state:'stagger'});assert.equal(zone.children[0].textContent,'STAGGERED');
+});
