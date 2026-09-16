@@ -4,7 +4,7 @@
   const modes = {
     sword: { layout: 'single', buttons: [
       { id: 'primary', idle: 'SWORD DUEL', pressed: 'READY', hint: 'SWORD DUEL', states: {
-        ready: { idle: 'HOLD SWORD-READY POSE\nTAP TO READY', hint: 'SET YOUR GUARD', enabled: true },
+        ready: { idle: 'TOP UP · SCREEN INWARD\nTAP TO READY', hint: 'SET YOUR GUARD', enabled: true },
         guard: { idle: 'SWING TO ATTACK\nMOVE SWORD TO GUARD', hint: 'DUEL', enabled: false },
         attack: { idle: 'FOLLOW THROUGH', hint: 'ATTACK / RECOVERY', enabled: false },
         stagger: { idle: 'REGAIN YOUR GUARD', hint: 'STAGGERED', enabled: false },

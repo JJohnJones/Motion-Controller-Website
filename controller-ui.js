@@ -69,7 +69,7 @@
       $('pregame-title').textContent = sport === 'sword' ? 'SWORD DUEL' : sport.toUpperCase();
       $('grip-instructions').textContent = sport === 'bowling' ? 'Point the top forward like a Wii controller. Hold the screen, swing forward, and release to bowl.' :
         sport === 'tennis' ? 'Hold the phone UPRIGHT, TOP UP, like a tennis racket handle. Tap to toss; swing to serve. Do not recalibrate upright.' :
-        'Hold the phone UPRIGHT, TOP UP, like a sword handle. In the arena, tap in your comfortable guard pose to ready each round. Do not recalibrate upright.';
+        'Hold the phone UPRIGHT, TOP UP, SCREEN facing inward: right hand = screen LEFT; left hand = screen RIGHT. Set your handedness in the game Settings. In the arena, tap in this guard pose to ready each round. Do not recalibrate upright.';
       $('ready').disabled = state.gameState !== 'prepare';
       $('ready').textContent = state.gameState === 'ready' ? 'Ready!' : 'I’m ready';
       $('ready-status').textContent = state.gameState === 'spectator' ? 'This game’s player slots are full.' : state.gameState === 'ready' ? 'Waiting for Start on the big screen…' : 'Tap Ready after changing to your playing grip.';
