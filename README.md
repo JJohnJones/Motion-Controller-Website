@@ -1,3 +1,7 @@
+## Controller v12: Get Ready and live orientation
+
+Deploy these updated files together, close old controller tabs, then reopen the QR link. Unity now sends `ready-bowling`, `ready-tennis`, or `ready-sword` before entering a game. Each participating phone confirms readiness through the existing generic primary button. Global calibration is always flat, screen face up, top pointed forward toward the display; upright racket/sword grip comes afterward. The alpha/beta/gamma overlay is enabled for testing and can be disabled in Setup. It does not intercept gameplay touches.
+
 ## Sword Duel mode
 
 The `sword` layout uses existing per-controller UI states: `ready`, `guard`, `attack`, `stagger`, and `waiting`. Before each round, hold the phone in a comfortable sword-ready pose and tap the full-screen surface. Unity captures a Sword-specific neutral pose and readies that player. Combat remains motion-only; the touch action is disabled until the next ready phase. Existing motion, pairing and recovery are unchanged.

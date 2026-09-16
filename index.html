@@ -10,15 +10,15 @@
   <meta name="referrer" content="no-referrer">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=11">
+  <link rel="stylesheet" href="./styles.css?v=12">
   <title>Motion Controller</title>
-  <script defer src="./motion-math.js?v=11"></script>
-  <script defer src="./hold-button.js?v=11"></script>
-  <script defer src="./config.js?v=11"></script>
-  <script defer src="./lan-transport.js?v=11"></script>
-  <script defer src="./controller-layouts.js?v=11"></script>
-  <script defer src="./controller-ui.js?v=11"></script>
-  <script defer src="./controller.js?v=11"></script>
+  <script defer src="./motion-math.js?v=12"></script>
+  <script defer src="./hold-button.js?v=12"></script>
+  <script defer src="./config.js?v=12"></script>
+  <script defer src="./lan-transport.js?v=12"></script>
+  <script defer src="./controller-layouts.js?v=12"></script>
+  <script defer src="./controller-ui.js?v=12"></script>
+  <script defer src="./controller.js?v=12"></script>
 </head>
 <body>
 <main>
@@ -30,11 +30,12 @@
   <section id="screen-setup" class="screen" hidden>
     <h2 id="setup-player">CONNECTED</h2><h1 id="setup-title">GET READY</h1>
     <p id="setup-required" role="status"></p>
-    <p>Enable motion, then hold your phone screen-up with its top pointing down the lane and calibrate.</p>
+    <p>For every game: lay the phone FLAT with the SCREEN FACE UP and its TOP pointed FORWARD toward the TV/monitor. Keep it still and tap Calibrate. Then pick it up in the game’s playing grip.</p>
     <button id="enable-motion">Enable Motion</button>
     <p id="motion-status" role="status">Motion has not been enabled.</p>
     <button id="calibrate" disabled>Calibrate</button>
     <p id="calibration-status" role="status">Calibration required after connecting.</p>
+    <label><input id="sensor-overlay" type="checkbox" checked> Show orientation values for testing</label>
     <button id="setup-done" hidden>Continue to controller</button>
   </section>
   <section id="screen-waiting" class="screen" hidden>
@@ -42,6 +43,14 @@
     <h1>READY TO PLAY</h1><p>Choose a game on the big screen.</p>
     <button id="setup">Calibrate / Setup</button>
     <p id="mode-status" class="mode-status" role="status"></p>
+  </section>
+  <section id="screen-pregame" class="screen" hidden>
+    <h2 id="pregame-title">GET READY</h2>
+    <p>Calibration pose: flat, screen face up, top pointed forward toward the TV/monitor.</p>
+    <h1>PICK UP YOUR PHONE</h1><p id="grip-instructions"></p>
+    <button id="ready">I'm ready</button>
+    <p id="ready-status" role="status"></p>
+    <button id="pregame-setup">Calibrate again</button>
   </section>
   <section id="screen-gameplay" hidden><div id="gameplay" aria-label="Game controls"></div></section>
   <section id="screen-paused" class="screen" hidden><h1>PAUSED</h1><p>Resume on the big screen.</p></section>
@@ -67,6 +76,7 @@
   </section>
 
 <pre id="transport-log">No LAN diagnostics</pre></details>
+<aside id="orientation-overlay" hidden aria-label="Orientation diagnostics"><span>α / β / γ · degrees</span><output id="live-orientation">Unavailable</output><small id="live-screen-angle"></small></aside>
 </main>
 </body>
 </html>

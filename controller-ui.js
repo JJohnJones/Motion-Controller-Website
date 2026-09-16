@@ -5,12 +5,17 @@
     if (!s.connected) return s.recovering ? 'recovering' : 'connecting';
     if (!s.motionEnabled || !s.calibrated || s.setup) return 'setup';
     if (s.paused) return 'paused';
+    if ((s.mode || '').startsWith('ready-')) return 'pregame';
     return modes[s.mode] ? 'gameplay' : 'waiting';
   }
   function create({ document, canPress, onTransition }) {
     const $ = id => document.getElementById(id);
     let bindings = [], currentMode = null, currentScreen = null, state = {}, presenters = [], lastPhase = null;
-    function cancel() { bindings.forEach(b => b.cancel()); }
+    const readyButton = HoldButton.bindHoldButton($('ready'), {
+      primaryOnly: true, canPress: () => currentScreen === 'pregame' && state.gameState === 'prepare' && canPress(),
+      onTransition: phase => onTransition(phase, 'primary'), onState: () => {}
+    });
+    function cancel() { readyButton.cancel(); bindings.forEach(b => b.cancel()); }
     function build(mode) {
       cancel(); bindings = []; presenters = []; currentMode = mode;
       const surface = $('gameplay'); surface.replaceChildren();
@@ -47,23 +52,31 @@
       if (currentMode !== state.mode) build(state.mode);
       currentScreen = screen; presenters.forEach(show => show());
       document.body.dataset.screen = screen;
-      for (const name of ['connecting', 'setup', 'waiting', 'gameplay', 'paused', 'recovering'])
+      for (const name of ['connecting', 'setup', 'waiting', 'pregame', 'gameplay', 'paused', 'recovering'])
         $('screen-' + name).hidden = name !== screen;
       $('connection-message').textContent = state.status || 'Scan the QR code displayed by your game.';
       $('recovering-message').textContent = state.status || 'Restoring your controller…';
-      $('mode-status').textContent = `Game mode: ${state.mode} · Controller v11` + (ControllerLayouts.modes[state.mode] || ['menu','waiting','pairing','connection'].includes(state.mode) ? '' : ' · This controller version does not support that game. Reopen the updated website.');
+      $('mode-status').textContent = `Game mode: ${state.mode} · Controller v12` + (ControllerLayouts.modes[state.mode] || state.mode.startsWith('ready-') || ['menu','waiting','pairing','connection'].includes(state.mode) ? '' : ' · This controller version does not support that game. Reopen the updated website.');
       $('player-name').textContent = state.playerNumber ? `PLAYER ${state.playerNumber}` : 'CONTROLLER READY';
       $('setup-player').textContent = state.playerNumber ? `PLAYER ${state.playerNumber}` : 'CONNECTED';
       $('setup-title').textContent = ControllerLayouts.modes[state.mode] ? `${state.mode.toUpperCase()} SETUP` : 'GET READY';
       $('setup-required').textContent = !state.motionEnabled ? 'Tap Enable Motion to use your phone as a racket or controller.' :
-        !state.calibrated ? 'Hold your phone in a comfortable ready pose and tap Calibrate. Your game controls open after Unity confirms it.' :
+        !state.calibrated ? 'Lay the phone flat, SCREEN FACE UP, TOP pointed FORWARD toward the TV/monitor. Hold still and tap Calibrate.' :
         'Motion and calibration are ready. Continue to your controller.';
       $('setup-done').hidden = !state.motionEnabled || !state.calibrated;
 
+      const sport = state.mode.replace(/^ready-/, '');
+      $('pregame-title').textContent = sport === 'sword' ? 'SWORD DUEL' : sport.toUpperCase();
+      $('grip-instructions').textContent = sport === 'bowling' ? 'Point the top forward like a Wii controller. Hold the screen, swing forward, and release to bowl.' :
+        sport === 'tennis' ? 'Hold the phone UPRIGHT, TOP UP, like a tennis racket handle. Tap to toss; swing to serve. Do not recalibrate upright.' :
+        'Hold the phone UPRIGHT, TOP UP, like a sword handle. In the arena, tap in your comfortable guard pose to ready each round. Do not recalibrate upright.';
+      $('ready').disabled = state.gameState !== 'prepare';
+      $('ready').textContent = state.gameState === 'ready' ? 'Ready!' : 'I’m ready';
+      $('ready-status').textContent = state.gameState === 'spectator' ? 'This game’s player slots are full.' : state.gameState === 'ready' ? 'Waiting for Start on the big screen…' : 'Tap Ready after changing to your playing grip.';
       $('debug-panel').hidden = !state.debug || screen === 'gameplay';
     }
-    return { render, cancel, reset: () => bindings.forEach(b => b.reset()),
-      get held() { return bindings.some(b => b.held); }, get screen() { return currentScreen; } };
+    return { render, cancel, reset: () => { readyButton.reset(); bindings.forEach(b => b.reset()); },
+      get held() { return readyButton.held || bindings.some(b => b.held); }, get screen() { return currentScreen; } };
   }
   const api = { screenFor, create };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

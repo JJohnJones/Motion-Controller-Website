@@ -234,3 +234,24 @@ test('Sword readies through primary input then remains motion-only during combat
  h.advance(20);h.orient();h.tick(8);assert.equal(s.sent.at(-1).type,'motion');
  s.receive({version:1,type:'ui-mode',mode:'sword',state:'stagger'});assert.equal(zone.children[0].textContent,'STAGGERED');
 });
+
+
+test('pre-game separates flat calibration from grip and Ready uses existing button events', async () => {
+  const {h,s}=await bowlingReady();
+  s.receive({version:1,type:'ui-mode',mode:'ready-tennis',state:'prepare',paused:false});
+  assert.equal(h.document.body.dataset.screen,'pregame');
+  assert.match(h.element('grip-instructions').textContent,/UPRIGHT/);
+  for(const type of ['pointerdown','pointerup'])h.element('ready').handlers[type]({pointerId:5,button:0,isPrimary:true,preventDefault(){}});
+  assert.deepEqual(s.sent.filter(p=>p.type==='button').map(p=>p.phase),['pressed','released']);
+  s.receive({version:1,type:'ui-mode',mode:'ready-tennis',state:'ready',paused:false});
+  assert.equal(h.element('ready').disabled,true);
+  h.click('pregame-setup');assert.equal(h.document.body.dataset.screen,'setup');
+  h.click('calibrate');s.receive({version:1,type:'calibrated',sequence:s.sent.at(-1).sequence});
+  assert.equal(h.document.body.dataset.screen,'pregame');
+  s.receive({version:1,type:'ui-mode',mode:'tennis',state:'serve',paused:false});
+  assert.equal(h.document.body.dataset.screen,'gameplay');
+  h.tick(200);assert.equal(h.element('orientation-overlay').hidden,false);
+  assert.match(h.element('live-orientation').textContent,/30.0/);
+  h.element('sensor-overlay').checked=false;h.element('sensor-overlay').handlers.change();h.tick(200);
+  assert.equal(h.element('orientation-overlay').hidden,true);
+});

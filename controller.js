@@ -20,6 +20,9 @@
       motionEnabled, calibrated, mode: uiMode, gameState, paused, playerNumber, setup: setupRequested,
       status: $('status').textContent, debug });
   }
+  let showOrientation = true;
+  $('sensor-overlay').addEventListener('change', () => { showOrientation = $('sensor-overlay').checked; });
+  $('pregame-setup').addEventListener('click', () => { setupRequested = true; renderUi(); });
   $('setup').addEventListener('click', () => { setupRequested = true; renderUi(); });
   $('setup-done').addEventListener('click', () => { if (motionEnabled && calibrated) { setupRequested = false; renderUi(); } });
   const fragment = new URLSearchParams(location.hash.slice(1));
@@ -87,7 +90,7 @@
       } else if (reply.type === 'calibrated' && reply.sequence === calibrationSequence) {
         calibrationSequence = null;
         calibrated = true; setupRequested = false;
-        $('calibration-status').textContent = 'Calibrated. Aim, hold the ball button, swing, then release.';
+        $('calibration-status').textContent = 'Calibrated from the flat pose. Now pick up the phone in your game’s playing grip.';
         renderUi();
       }
       renderUi();
@@ -209,6 +212,9 @@
     }
     const m = motion && performance.now() - motion.timestamp < 250 ? motion : null;
     $('orientation').textContent = orientation ? [orientation.alpha, orientation.beta, orientation.gamma].map(n => n.toFixed(1)).join(' / ') + (freshOrientation() ? '' : ' (stale)') : 'Unavailable';
+    $('orientation-overlay').hidden = !showOrientation || !motionEnabled || !connected();
+    $('live-orientation').textContent = $('orientation').textContent;
+    $('live-screen-angle').textContent = 'Screen angle: ' + screenAngle + '°';
     $('rotation').textContent = format(m?.angularVelocity);
     $('acceleration').textContent = format(m?.acceleration);
     $('gravity').textContent = format(m?.gravity);
